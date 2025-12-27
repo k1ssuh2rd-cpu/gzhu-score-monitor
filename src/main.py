@@ -5,7 +5,8 @@ import time
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
+from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -14,6 +15,7 @@ from src.logger import logger
 from src.gzhu_login import GZHULogin, GZHULoginError
 from src.score_parser import parse_course_scores, format_scores, ScoreParseError
 from src.email_notifier import create_notifier, EmailSendError
+from src.email_status_tracker import EmailStatusTracker
 
 
 class ScoreMonitor:
@@ -22,7 +24,9 @@ class ScoreMonitor:
     def __init__(self):
         self.gzhu_login: Optional[GZHULogin] = None
         self.notifier = create_notifier()
+        self.status_tracker = EmailStatusTracker()
         self.previous_score_count = 0
+        self.previous_scores: Dict[str, str] = {}
         self.running = False
     
     def initialize(self) -> bool:
@@ -40,7 +44,12 @@ class ScoreMonitor:
             logger.error("邮件通知器初始化失败")
             return False
         
-        self.gzhu_login = GZHULogin(config.GZHU_USERNAME, config.GZHU_PASSWORD)
+        self.gzhu_login = GZHULogin(
+            config.GZHU_USERNAME,
+            config.GZHU_PASSWORD,
+            email_notifier=self.notifier,
+            status_tracker=self.status_tracker
+        )
         
         if not self.gzhu_login.login():
             logger.error("登录失败，请检查账号密码")
@@ -51,6 +60,7 @@ class ScoreMonitor:
             try:
                 initial_scores = parse_course_scores(initial_data)
                 self.previous_score_count = len(initial_scores)
+                self.previous_scores = initial_scores.copy()
                 logger.info(f"初始化完成，当前共有{self.previous_score_count}门课程成绩")
                 return True
             except ScoreParseError:
@@ -59,6 +69,214 @@ class ScoreMonitor:
         else:
             logger.error("获取初始成绩数据失败")
             return False
+    
+    def _generate_score_update_email(
+        self,
+        new_scores: Dict[str, str],
+        old_scores: Dict[str, str]
+    ) -> str:
+        """
+        生成成绩更新邮件正文
+        
+        Args:
+            new_scores: 新成绩字典
+            old_scores: 旧成绩字典
+            
+        Returns:
+            HTML格式的邮件正文
+        """
+        new_courses = set(new_scores.keys()) - set(old_scores.keys())
+        updated_courses = []
+        
+        for course in old_scores.keys():
+            if course in new_scores and new_scores[course] != old_scores[course]:
+                updated_courses.append(course)
+        
+        new_courses_html = ""
+        if new_courses:
+            rows = ""
+            for course in new_courses:
+                rows += f"""
+                    <tr>
+                        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">{course}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0; text-align: center; font-weight: bold; color: #4CAF50;">{new_scores[course]}</td>
+                    </tr>
+                """
+            new_courses_html = f"""
+                <div class="info-section">
+                    <div class="info-title">📚 新增课程成绩</div>
+                    <div style="background-color: white; border-radius: 3px; overflow: hidden;">
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                            <thead>
+                                <tr style="background-color: #4CAF50; color: white;">
+                                    <th style="padding: 12px; text-align: left;">课程名称</th>
+                                    <th style="padding: 12px; text-align: center;">成绩</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 10px; color: #666; font-size: 14px;">
+                        共 <strong>{len(new_courses)}</strong> 门新课程
+                    </div>
+                </div>
+            """
+        
+        updated_courses_html = ""
+        if updated_courses:
+            rows = ""
+            for course in updated_courses:
+                old_score = old_scores[course]
+                new_score = new_scores[course]
+                change_type = "↑" if float(new_score) > float(old_score) else "↓"
+                change_color = "#4CAF50" if float(new_score) > float(old_score) else "#f44336"
+                rows += f"""
+                    <tr>
+                        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">{course}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0; text-align: center;">{old_score}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0; text-align: center; font-weight: bold; color: {change_color};">{new_score} {change_type}</td>
+                    </tr>
+                """
+            updated_courses_html = f"""
+                <div class="info-section">
+                    <div class="info-title">📊 成绩更新对比</div>
+                    <div style="background-color: white; border-radius: 3px; overflow: hidden;">
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                            <thead>
+                                <tr style="background-color: #2196F3; color: white;">
+                                    <th style="padding: 12px; text-align: left;">课程名称</th>
+                                    <th style="padding: 12px; text-align: center;">原成绩</th>
+                                    <th style="padding: 12px; text-align: center;">新成绩</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 10px; color: #666; font-size: 14px;">
+                        共 <strong>{len(updated_courses)}</strong> 门课程成绩更新
+                    </div>
+                </div>
+            """
+        
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #f5f5f5;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+                    color: white;
+                    padding: 30px 20px;
+                    text-align: center;
+                    border-radius: 10px 10px 0 0;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .header h2 {{
+                    margin: 0;
+                    font-size: 24px;
+                    font-weight: 600;
+                }}
+                .header p {{
+                    margin: 10px 0 0 0;
+                    opacity: 0.9;
+                    font-size: 14px;
+                }}
+                .content {{
+                    background-color: white;
+                    padding: 30px;
+                    border: 1px solid #e0e0e0;
+                    border-top: none;
+                    border-radius: 0 0 10px 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .info-section {{
+                    margin-bottom: 25px;
+                    padding: 20px;
+                    background-color: #f9f9f9;
+                    border-left: 4px solid #2196F3;
+                    border-radius: 5px;
+                }}
+                .info-title {{
+                    font-weight: bold;
+                    color: #2196F3;
+                    margin-bottom: 15px;
+                    font-size: 18px;
+                    display: flex;
+                    align-items: center;
+                }}
+                .info-title::before {{
+                    content: "▶";
+                    margin-right: 8px;
+                    font-size: 12px;
+                }}
+                .summary {{
+                    background-color: #e3f2fd;
+                    border-left: 4px solid #2196F3;
+                    padding: 15px;
+                    margin-bottom: 25px;
+                    border-radius: 5px;
+                }}
+                .summary-item {{
+                    margin: 8px 0;
+                    font-size: 14px;
+                }}
+                .summary-item strong {{
+                    color: #1976D2;
+                }}
+                .footer {{
+                    margin-top: 30px;
+                    text-align: center;
+                    color: #999;
+                    font-size: 12px;
+                    padding-top: 20px;
+                    border-top: 1px solid #e0e0e0;
+                }}
+                table {{
+                    font-size: 14px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>🎯 成绩更新通知</h2>
+                <p>广州大学成绩监测系统</p>
+            </div>
+            <div class="content">
+                <div class="summary">
+                    <div class="summary-item"><strong>📅 更新时间:</strong> {current_time}</div>
+                    <div class="summary-item"><strong>📚 新增课程:</strong> {len(new_courses)} 门</div>
+                    <div class="summary-item"><strong>📊 更新课程:</strong> {len(updated_courses)} 门</div>
+                </div>
+                
+                {new_courses_html}
+                
+                {updated_courses_html}
+                
+                <div class="footer">
+                    <p>此邮件由成绩监测系统自动发送，请勿回复。</p>
+                    <p>发送时间: {current_time}</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return html_body
     
     def check_scores(self) -> None:
         """
@@ -75,18 +293,47 @@ class ScoreMonitor:
             
             logger.info(f"当前课程数: {current_count}, 上次课程数: {self.previous_score_count}")
             
-            if current_count != self.previous_score_count:
+            if current_count != self.previous_score_count or scores != self.previous_scores:
                 logger.info("检测到成绩变化！")
                 
-                body = format_scores(scores)
+                email_body = self._generate_score_update_email(scores, self.previous_scores)
+                
                 try:
-                    self.notifier.send(
+                    success = self.notifier.send(
                         subject=config.EMAIL_SUBJECT,
-                        body=body
+                        body=email_body,
+                        is_html=True
                     )
-                    self.previous_score_count = current_count
+                    
+                    if success:
+                        self.previous_score_count = current_count
+                        self.previous_scores = scores.copy()
+                        
+                        if self.status_tracker:
+                            self.status_tracker.add_status(
+                                email_type="score",
+                                subject=config.EMAIL_SUBJECT,
+                                recipients=self.notifier.receiver_emails,
+                                status="success",
+                                additional_info={
+                                    "previous_count": len(self.previous_scores),
+                                    "current_count": current_count,
+                                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                }
+                            )
                 except EmailSendError:
                     logger.error("发送通知邮件失败")
+                    if self.status_tracker:
+                        self.status_tracker.add_status(
+                            email_type="score",
+                            subject=config.EMAIL_SUBJECT,
+                            recipients=self.notifier.receiver_emails,
+                            status="failed",
+                            error_message="邮件发送失败",
+                            additional_info={
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            }
+                        )
             else:
                 logger.debug("成绩无变化")
                 

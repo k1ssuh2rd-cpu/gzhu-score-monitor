@@ -63,13 +63,17 @@ class EmailNotifier:
             if attachments:
                 self._add_attachments(message, attachments)
             
-            with smtplib.SMTP_SSL(self.SMTP_HOST, self.SMTP_PORT) as server:
+            server = smtplib.SMTP_SSL(self.SMTP_HOST, self.SMTP_PORT)
+            try:
                 server.login(self.sender_email, self.auth_code)
-                server.sendmail(
+                result = server.sendmail(
                     self.sender_email,
                     self.receiver_emails,
                     message.as_string()
                 )
+                server.quit()
+            finally:
+                server.close()
             
             logger.info(f"邮件发送成功: {self.receiver_emails}")
             return True

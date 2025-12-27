@@ -43,3 +43,13 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Data files
+*.db
+*.sqlite
+*.json
+data/
+status/
+
+# Backup
+backup/
