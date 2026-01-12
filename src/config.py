@@ -50,6 +50,10 @@ class Config:
     EMAIL_SUBJECT: str = os.getenv("EMAIL_SUBJECT", "新成绩通知")
     ENABLE_LOGIN_TEST_EMAIL: bool = os.getenv("ENABLE_LOGIN_TEST_EMAIL", "true").lower() == "true"
     
+    # 心跳邮件配置
+    HEARTBEAT_ENABLED: bool = os.getenv("HEARTBEAT_ENABLED", "true").lower() == "true"
+    HEARTBEAT_INTERVAL: int = int(os.getenv("HEARTBEAT_INTERVAL", "3600"))  # 默认1小时
+    
     LOG_DIR: Path = BASE_DIR / "logs"
     LOG_DIR.mkdir(exist_ok=True)
     LOG_FILE: Path = LOG_DIR / "score_monitor.log"

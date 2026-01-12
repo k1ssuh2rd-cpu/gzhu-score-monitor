@@ -28,6 +28,7 @@ class ScoreMonitor:
         self.previous_score_count = 0
         self.previous_scores: Dict[str, str] = {}
         self.running = False
+        self.last_heartbeat_time: Optional[datetime] = None
     
     def initialize(self) -> bool:
         """
@@ -340,6 +341,164 @@ class ScoreMonitor:
         except ScoreParseError:
             logger.error("解析成绩数据失败")
     
+    def _generate_heartbeat_email(self) -> str:
+        """
+        生成心跳邮件正文
+        
+        Returns:
+            HTML格式的邮件正文
+        """
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        uptime = ""
+        if self.last_heartbeat_time:
+            delta = datetime.now() - self.last_heartbeat_time
+            hours = int(delta.total_seconds() // 3600)
+            minutes = int((delta.total_seconds() % 3600) // 60)
+            uptime = f"{hours}小时{minutes}分钟"
+        else:
+            uptime = "刚刚启动"
+        
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #f5f5f5;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+                    color: white;
+                    padding: 30px 20px;
+                    text-align: center;
+                    border-radius: 10px 10px 0 0;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .header h2 {{
+                    margin: 0;
+                    font-size: 24px;
+                    font-weight: 600;
+                }}
+                .header p {{
+                    margin: 10px 0 0 0;
+                    opacity: 0.9;
+                    font-size: 14px;
+                }}
+                .content {{
+                    background-color: white;
+                    padding: 30px;
+                    border: 1px solid #e0e0e0;
+                    border-top: none;
+                    border-radius: 0 0 10px 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .status-box {{
+                    background-color: #e8f5e9;
+                    border-left: 4px solid #4CAF50;
+                    padding: 20px;
+                    margin-bottom: 20px;
+                    border-radius: 5px;
+                }}
+                .status-item {{
+                    margin: 10px 0;
+                    font-size: 14px;
+                }}
+                .status-item strong {{
+                    color: #2e7d32;
+                }}
+                .footer {{
+                    margin-top: 30px;
+                    text-align: center;
+                    color: #999;
+                    font-size: 12px;
+                    padding-top: 20px;
+                    border-top: 1px solid #e0e0e0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>💓 程序心跳检测</h2>
+                <p>广州大学成绩监测系统</p>
+            </div>
+            <div class="content">
+                <div class="status-box">
+                    <div class="status-item"><strong>✅ 状态:</strong> 程序运行正常</div>
+                    <div class="status-item"><strong>🕐 检测时间:</strong> {current_time}</div>
+                    <div class="status-item"><strong>⏱️ 距上次心跳:</strong> {uptime}</div>
+                    <div class="status-item"><strong>📚 当前监测课程数:</strong> {self.previous_score_count} 门</div>
+                </div>
+                <div class="footer">
+                    <p>此邮件由成绩监测系统自动发送，用于确认程序正常运行。</p>
+                    <p>发送时间: {current_time}</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return html_body
+    
+    def _check_and_send_heartbeat(self) -> None:
+        """
+        检查并发送心跳邮件
+        """
+        if not config.HEARTBEAT_ENABLED:
+            return
+        
+        current_time = datetime.now()
+        
+        # 首次运行或到达心跳间隔时发送
+        should_send = (
+            self.last_heartbeat_time is None or
+            (current_time - self.last_heartbeat_time).total_seconds() >= config.HEARTBEAT_INTERVAL
+        )
+        
+        if should_send:
+            logger.info("发送心跳邮件...")
+            try:
+                email_body = self._generate_heartbeat_email()
+                success = self.notifier.send(
+                    subject="[心跳] 成绩监测系统运行正常",
+                    body=email_body,
+                    is_html=True
+                )
+                
+                if success:
+                    self.last_heartbeat_time = current_time
+                    logger.info("心跳邮件发送成功")
+                    
+                    if self.status_tracker:
+                        self.status_tracker.add_status(
+                            email_type="heartbeat",
+                            subject="[心跳] 成绩监测系统运行正常",
+                            recipients=self.notifier.receiver_emails,
+                            status="success",
+                            additional_info={
+                                "timestamp": current_time.strftime("%Y-%m-%d %H:%M:%S"),
+                                "course_count": self.previous_score_count
+                            }
+                        )
+            except EmailSendError as e:
+                logger.error(f"心跳邮件发送失败: {e}")
+                if self.status_tracker:
+                    self.status_tracker.add_status(
+                        email_type="heartbeat",
+                        subject="[心跳] 成绩监测系统运行正常",
+                        recipients=self.notifier.receiver_emails,
+                        status="failed",
+                        error_message=str(e),
+                        additional_info={
+                            "timestamp": current_time.strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                    )
+    
     def run(self) -> None:
         """
         运行监控循环
@@ -355,6 +514,7 @@ class ScoreMonitor:
         try:
             while self.running:
                 self.check_scores()
+                self._check_and_send_heartbeat()
                 time.sleep(config.CHECK_INTERVAL)
         except KeyboardInterrupt:
             logger.info("接收到中断信号，正在停止...")

@@ -14,6 +14,7 @@
 - 邮件发送状态跟踪
 - 管理后台工具查看邮件发送历史
 - SMTP连接测试工具
+- **心跳邮件功能**：每小时自动发送邮件，确认程序正常运行
 
 ## 安装依赖
 
@@ -119,6 +120,8 @@ cp .env.example .env
 - `QQ_AUTH_CODE`: QQ邮箱SMTP授权码
 - `RECEIVER_EMAILS`: 接收通知的邮箱列表（多个邮箱用逗号分隔）
 - `TEST_EMAIL`: 测试邮件接收地址（可选）
+- `HEARTBEAT_ENABLED`: 是否启用心跳邮件（默认true）
+- `HEARTBEAT_INTERVAL`: 心跳邮件发送间隔（秒，默认3600即1小时）
 
 ### 获取QQ邮箱授权码
 
