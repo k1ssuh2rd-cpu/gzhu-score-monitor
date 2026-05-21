@@ -71,10 +71,6 @@ python -m src.main
 python -m src.main --once
 ```
 
-### 用 GitHub Actions 自动跑（无需自己开电脑）
-
-Fork 本仓库，在 Settings → Secrets and variables → Actions 中添加和 `.env` 一样的配置项，Actions 会每 6 小时自动检查。也可以手动触发。
-
 ## 怎么获取 QQ 邮箱授权码？
 
 1. 登录 QQ 邮箱网页版
