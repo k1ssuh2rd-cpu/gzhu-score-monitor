@@ -1,0 +1,4 @@
+requests>=2.31
+lxml>=4.9
+PyExecJS>=1.5
+python-dotenv>=1.0
