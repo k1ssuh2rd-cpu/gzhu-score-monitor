@@ -1,148 +1,114 @@
-# 广州大学成绩监测系统
+# Gzhu Score Monitor
 
-自动监测广州大学教务系统成绩发布情况，并通过邮件及时通知。
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## 功能特性
+广州大学教务系统成绩监测工具。定时检查成绩变化，通过 QQ 邮箱发送 HTML 通知。
 
-- 自动登录广州大学教务系统
-- 实时监测成绩发布情况
-- 登录成功后自动发送测试邮件（包含当前成绩信息）
-- 检测到新成绩时自动发送成绩更新通知邮件
-- 成绩更新邮件展示前后对比，清晰显示新增课程和成绩变化
-- 支持多收件人
-- 完整的日志记录
-- 邮件发送状态跟踪
-- 管理后台工具查看邮件发送历史
-- SMTP连接测试工具
-- **心跳邮件功能**：每小时自动发送邮件，确认程序正常运行
+> 基于 [@01seven](https://github.com/01seven) 的[原始项目](https://github.com/01seven/Gzhu-Scores-checking)改进，增加了自动重连、会话缓存、GitHub Actions 部署等能力。
 
-## 安装依赖
+## 快速开始
 
 ```bash
-pip install -r requirements.txt
+git clone <your-repo-url>
+cd Gzhu-Score-Monitor
+cp .env.example .env        # 编辑 .env 填入账号和邮箱信息
+pip install -e .            # 安装依赖并注册命令行工具
+gzhu-monitor --test         # 发送测试邮件，验证一切正常
+gzhu-monitor                # 启动持续监测
 ```
 
-## 配置说明
-
-1. 复制 `.env.example` 为 `.env`
-2. 填写你的账号密码和邮箱配置
+## 命令行
 
 ```bash
-cp .env.example .env
+gzhu-monitor           # 持续监测（每 6 小时检查一次）
+gzhu-monitor --once    # 查询一次，打印当前成绩
+gzhu-monitor --test    # 登录并发送测试邮件
+gzhu-monitor --check   # CI 模式：对比上次状态，有变化则通知
+gzhu-test-smtp         # SMTP 连通性测试
+gzhu-admin             # 邮件发送历史管理
 ```
 
-## 使用方法
+未安装时可用 `python -m` 等价运行，见[手动运行](#手动运行)。
 
-### 启动成绩监测
+## 相比原项目的改进
 
-```bash
-python -m src.main
-```
+- **自动重连** — 查询失败时自动重新登录（最多 3 次），避免因会话过期中断监测
+- **会话缓存** — 登录凭证持久化到本地，重启无需重新登录
+- **模板分离** — HTML 邮件模板集中在 `src/templates.py`，易于自定义样式
+- **标准打包** — `pyproject.toml` + `pip install -e .`，注册全局命令行工具
+- **CI 就绪** — 内置 GitHub Actions 工作流，Fork 后配置 Secrets 即可无人值守运行
+- **安全修复** — 测试邮件不再包含明文密码
 
-### 测试SMTP连接
+## 配置
 
-```bash
-python test_smtp.py
-```
+编辑 `.env` 文件：
 
-### 查看邮件发送状态
+| 变量 | 必填 | 说明 |
+|------|:---:|------|
+| `GZHU_USERNAME` | ✓ | 学号 |
+| `GZHU_PASSWORD` | ✓ | 教务系统密码 |
+| `QQ_EMAIL` | ✓ | 发送通知的 QQ 邮箱 |
+| `QQ_AUTH_CODE` | ✓ | QQ 邮箱 SMTP 授权码（[获取方式](#获取-qq-邮箱授权码)） |
+| `RECEIVER_EMAILS` | ✓ | 接收通知的邮箱，逗号分隔 |
+| `TEST_EMAIL` | | 测试邮件收件地址 |
+| `CHECK_INTERVAL` | | 检查间隔（秒），默认 21600 |
+| `HEARTBEAT_ENABLED` | | 是否启用心跳邮件，默认 true |
+| `HEARTBEAT_INTERVAL` | | 心跳间隔（秒），默认 86400 |
 
-```bash
-python src/admin_cli.py
-```
+### 获取 QQ 邮箱授权码
 
-## 邮件功能说明
-
-### 登录测试邮件
-- 登录成功后自动发送
-- 包含登录时间、IP地址、设备信息
-- 显示当前所有课程成绩
-- 邮件格式美观，信息完整
-
-### 成绩更新通知邮件
-- 检测到成绩变化时自动发送
-- 展示新增课程列表
-- 显示成绩更新对比（原成绩 vs 新成绩）
-- 使用颜色标识成绩变化（绿色表示提升，红色表示下降）
-- 包含更新时间和统计信息
+QQ 邮箱 → 设置 → 账户 → POP3/SMTP 服务 → 开启并生成授权码。
 
 ## 项目结构
 
 ```
-成绩监测/
-├── .env.example          # 环境变量示例
-├── .gitignore           # Git忽略文件
-├── requirements.txt     # 依赖列表
-├── README.md            # 项目说明
-├── test_smtp.py         # SMTP连接测试工具
-├── logs/                # 日志目录
-├── status/              # 邮件状态存储目录
-└── src/
-    ├── __init__.py
-    ├── config.py            # 配置管理
-    ├── logger.py            # 日志配置
-    ├── gzhu_login.py        # 登录模块
-    ├── score_parser.py      # 成绩解析
-    ├── email_notifier.py    # 邮件通知
-    ├── email_status_tracker.py # 邮件状态跟踪
-    ├── device_info.py       # 设备信息收集
-    ├── ip_address.py        # IP地址检测
-    ├── admin_api.py         # 管理后台API
-    ├── admin_cli.py         # 管理后台命令行工具
-    └── main.py              # 主程序入口
+├── LICENSE
+├── pyproject.toml
+├── .github/workflows/check.yml   # GitHub Actions
+├── scripts/                      # 命令行工具
+│   ├── test_smtp.py
+│   └── admin.py
+├── src/                          # 核心代码
+│   ├── main.py                   # 入口，ScoreMonitor 主逻辑
+│   ├── gzhu_login.py             # CAS 登录 + DES 加密
+│   ├── score_parser.py           # 成绩 JSON 解析
+│   ├── email_notifier.py         # SMTP 发送
+│   ├── email_status_tracker.py   # 发送记录
+│   ├── templates.py              # 邮件 HTML 模板
+│   ├── config.py                 # 配置加载
+│   └── ...
+├── logs/                         # 运行日志
+└── status/                       # 成绩快照与会话缓存
 ```
 
-## 注意事项
+## GitHub Actions
 
-- 请妥善保管 `.env` 文件，不要提交到版本控制系统
-- QQ邮箱需要开启SMTP服务并获取授权码
-- 建议使用虚拟环境运行
-- 系统会自动检测成绩变化并发送通知
-- 首次登录会发送测试邮件，请检查邮箱
-- 成绩更新邮件会详细展示前后对比
-- 可以使用管理后台工具查看邮件发送历史
-- SMTP连接测试工具可用于验证邮件配置
+Fork 本仓库，在 Settings → Secrets → Actions 中添加配置项（同 `.env` 文件中的必填项），Actions 每 6 小时自动运行一次 `--check`，成绩有变化即邮件通知。
 
-## 配置说明
+也可在 Actions 页面手动触发（`workflow_dispatch`）。
 
-### 环境变量配置
+## 手动运行
 
-复制 `.env.example` 为 `.env` 并填写以下配置：
+未安装时可直接用 `python -m` 方式运行：
 
 ```bash
-cp .env.example .env
+python -m src.main              # 持续监测
+python -m src.main --once       # 查询一次
+python -m src.main --test       # 发送测试邮件
+python -m src.main --check      # CI 模式
+python scripts/test_smtp.py     # SMTP 测试
+python -m scripts.admin         # 管理后台
 ```
 
-主要配置项：
-- `GZHU_USERNAME`: 广州大学教务系统账号
-- `GZHU_PASSWORD`: 广州大学教务系统密码
-- `QQ_EMAIL`: 发送邮件的QQ邮箱
-- `QQ_AUTH_CODE`: QQ邮箱SMTP授权码
-- `RECEIVER_EMAILS`: 接收通知的邮箱列表（多个邮箱用逗号分隔）
-- `TEST_EMAIL`: 测试邮件接收地址（可选）
-- `HEARTBEAT_ENABLED`: 是否启用心跳邮件（默认true）
-- `HEARTBEAT_INTERVAL`: 心跳邮件发送间隔（秒，默认3600即1小时）
+## FAQ
 
-### 获取QQ邮箱授权码
+**邮件发不出去？** 确认 QQ 邮箱 SMTP 已开启，授权码正确。运行 `gzhu-test-smtp` 诊断。
 
-1. 登录QQ邮箱网页版
-2. 进入"设置" -> "账户"
-3. 开启"POP3/SMTP服务"
-4. 生成授权码并复制到配置文件
+**登录失败？** 检查账号密码，查看 `logs/` 下的日志。确认教务系统可正常访问。
 
-## 常见问题
+**成绩没更新？** 系统每 6 小时检查一次。确认教务系统上确实有新成绩，查看日志确认运行状态。
 
-### 邮件发送失败
-- 检查QQ邮箱是否开启SMTP服务
-- 确认授权码是否正确
-- 使用 `test_smtp.py` 测试连接
+## License
 
-### 登录失败
-- 确认教务系统账号密码正确
-- 检查网络连接
-- 查看日志文件了解详细错误信息
-
-### 成绩未更新
-- 系统默认每5秒检查一次成绩
-- 检查教务系统是否有新成绩发布
-- 查看日志确认系统正常运行
+MIT

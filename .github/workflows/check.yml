@@ -17,7 +17,7 @@ jobs:
           python-version: '3.13'
 
       - name: 安装依赖
-        run: pip install requests lxml PyExecJS python-dotenv
+        run: pip install .
 
       - name: 恢复成绩状态
         id: cache-state

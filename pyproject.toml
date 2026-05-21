@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gzhu-score-monitor"
+version = "1.1.0"
+description = "广州大学教务系统成绩监测工具 — 基于 @01seven 原始项目改进"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+dependencies = [
+    "requests>=2.31",
+    "lxml>=4.9",
+    "PyExecJS>=1.5",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+gzhu-monitor = "src.main:main"
+gzhu-test-smtp = "scripts.test_smtp:test_smtp_connection"
+gzhu-admin = "scripts.admin:main"
+
+[tool.setuptools.packages.find]
+include = ["src*", "scripts*"]

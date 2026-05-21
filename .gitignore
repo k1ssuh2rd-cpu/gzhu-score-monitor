@@ -47,9 +47,9 @@ Thumbs.db
 # Data files
 *.db
 *.sqlite
-*.json
 data/
 status/
+logs/*.json
 
 # Backup
 backup/
