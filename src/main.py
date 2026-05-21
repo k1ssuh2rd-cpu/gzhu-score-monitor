@@ -1,6 +1,8 @@
 """
 主程序入口
 """
+import argparse
+import json
 import time
 import signal
 import sys
@@ -10,7 +12,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import config
+from src.config import config, BASE_DIR
 from src.logger import logger
 from src.gzhu_login import GZHULogin, GZHULoginError
 from src.score_parser import parse_course_scores, format_scores, ScoreParseError
@@ -20,7 +22,9 @@ from src.email_status_tracker import EmailStatusTracker
 
 class ScoreMonitor:
     """成绩监控类"""
-    
+
+    MAX_RECONNECT = 3
+
     def __init__(self):
         self.gzhu_login: Optional[GZHULogin] = None
         self.notifier = create_notifier()
@@ -29,6 +33,7 @@ class ScoreMonitor:
         self.previous_scores: Dict[str, str] = {}
         self.running = False
         self.last_heartbeat_time: Optional[datetime] = None
+        self.reconnect_count = 0
     
     def initialize(self) -> bool:
         """
@@ -285,8 +290,12 @@ class ScoreMonitor:
         """
         data = self.gzhu_login.query_scores()
         if not data:
-            logger.warning("获取成绩数据失败，跳过本次检查")
-            return
+            logger.warning("获取成绩数据失败，尝试重新登录...")
+            if not self._try_reconnect():
+                return
+            data = self.gzhu_login.query_scores()
+            if not data:
+                return
         
         try:
             scores = parse_course_scores(data)
@@ -340,7 +349,21 @@ class ScoreMonitor:
                 
         except ScoreParseError:
             logger.error("解析成绩数据失败")
-    
+
+    def _try_reconnect(self) -> bool:
+        """尝试重新登录，返回是否成功"""
+        if self.reconnect_count >= self.MAX_RECONNECT:
+            logger.error(f"已达最大重连次数({self.MAX_RECONNECT})，放弃重连")
+            return False
+        self.reconnect_count += 1
+        logger.info(f"尝试重新登录 (第{self.reconnect_count}/{self.MAX_RECONNECT}次)...")
+        if self.gzhu_login.login():
+            self.reconnect_count = 0
+            logger.info("重新登录成功")
+            return True
+        logger.error("重新登录失败")
+        return False
+
     def _generate_heartbeat_email(self) -> str:
         """
         生成心跳邮件正文
@@ -499,6 +522,79 @@ class ScoreMonitor:
                         }
                     )
     
+    def run_once(self) -> None:
+        """查询一次成绩并打印结果"""
+        if not self.initialize():
+            logger.error("初始化失败")
+            return
+        data = self.gzhu_login.query_scores()
+        if data:
+            try:
+                scores = parse_course_scores(data)
+                print(format_scores(scores))
+            except ScoreParseError:
+                logger.error("解析成绩数据失败")
+        else:
+            logger.error("查询成绩失败")
+
+    def run_test(self) -> None:
+        """发送测试邮件验证配置"""
+        if not config.GZHU_USERNAME or not config.GZHU_PASSWORD:
+            logger.error("教务系统账号密码未配置，请检查.env文件")
+            return
+        if not self.notifier:
+            logger.error("邮件通知器初始化失败")
+            return
+        self.gzhu_login = GZHULogin(
+            config.GZHU_USERNAME,
+            config.GZHU_PASSWORD,
+            email_notifier=self.notifier,
+            status_tracker=self.status_tracker
+        )
+        if self.gzhu_login.login():
+            print("登录成功，测试邮件已发送")
+        else:
+            print("登录失败，请检查账号密码和网络连接")
+
+    def run_check(self) -> None:
+        """CI模式：查询一次，对比上次状态，有变化则发邮件通知"""
+        if not self.initialize():
+            logger.error("初始化失败")
+            sys.exit(1)
+
+        state_file = BASE_DIR / "status" / "scores.json"
+        previous_scores: Dict[str, str] = {}
+        if state_file.exists():
+            try:
+                previous_scores = json.loads(state_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        data = self.gzhu_login.query_scores()
+        if not data:
+            logger.error("查询成绩失败")
+            sys.exit(1)
+
+        try:
+            scores = parse_course_scores(data)
+        except ScoreParseError:
+            logger.error("解析成绩数据失败")
+            sys.exit(1)
+
+        if scores != previous_scores:
+            logger.info(f"检测到成绩变化 (上次{len(previous_scores)}门 → 本次{len(scores)}门)，发送通知...")
+            body = self._generate_score_update_email(scores, previous_scores)
+            try:
+                self.notifier.send(subject=config.EMAIL_SUBJECT, body=body, is_html=True)
+                logger.info("通知邮件发送成功")
+            except EmailSendError:
+                logger.error("发送通知邮件失败")
+                sys.exit(1)
+        else:
+            logger.info(f"成绩无变化 (共{len(scores)}门)")
+
+        state_file.write_text(json.dumps(scores, ensure_ascii=False), encoding="utf-8")
+
     def run(self) -> None:
         """
         运行监控循环
@@ -506,20 +602,23 @@ class ScoreMonitor:
         if not self.initialize():
             logger.error("初始化失败，程序退出")
             return
-        
+
         self.running = True
         logger.info("开始监控成绩变化...")
         logger.info(f"检查间隔: {config.CHECK_INTERVAL}秒")
-        
+
         try:
             while self.running:
-                self.check_scores()
-                self._check_and_send_heartbeat()
+                try:
+                    self.check_scores()
+                    self._check_and_send_heartbeat()
+                    self.reconnect_count = 0
+                except Exception as e:
+                    logger.error(f"检查异常: {e}")
+                    self._try_reconnect()
                 time.sleep(config.CHECK_INTERVAL)
         except KeyboardInterrupt:
             logger.info("接收到中断信号，正在停止...")
-        except Exception as e:
-            logger.error(f"监控过程中发生错误: {e}")
         finally:
             self.stop()
     
@@ -539,11 +638,25 @@ def signal_handler(signum, frame):
 
 def main():
     """主函数"""
+    parser = argparse.ArgumentParser(description="广州大学成绩监测系统")
+    parser.add_argument("--once", action="store_true", help="查询一次成绩并打印结果")
+    parser.add_argument("--test", action="store_true", help="发送测试邮件验证配置并退出")
+    parser.add_argument("--check", action="store_true", help="CI模式：查询并对比上次，有变化则发邮件通知")
+    args = parser.parse_args()
+
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     monitor = ScoreMonitor()
-    monitor.run()
+
+    if args.test:
+        monitor.run_test()
+    elif args.once:
+        monitor.run_once()
+    elif args.check:
+        monitor.run_check()
+    else:
+        monitor.run()
 
 
 if __name__ == "__main__":

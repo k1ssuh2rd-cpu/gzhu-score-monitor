@@ -3,14 +3,16 @@
 """
 import json
 import logging
+import pickle
 import re
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Callable
 import requests
 import execjs
 from lxml import html
-from src.config import config
+from src.config import config, BASE_DIR
 from src.logger import logger
 from src.device_info import DeviceInfo
 from src.ip_address import IPAddress
@@ -78,6 +80,9 @@ class GZHULogin:
         self._is_logged_in = False
         self.email_notifier = email_notifier
         self.status_tracker = status_tracker
+        self._session_path = BASE_DIR / "status" / "session.pkl"
+        self._session_path.parent.mkdir(parents=True, exist_ok=True)
+        self._try_load_session()
     
     def _retry_request(self, func, *args, **kwargs):
         """
@@ -104,11 +109,15 @@ class GZHULogin:
     
     def login(self) -> bool:
         """
-        登录广州大学教务系统
-        
+        登录广州大学教务系统，优先使用缓存的session
+
         Returns:
             登录是否成功
         """
+        if self._is_logged_in:
+            logger.info("已有有效登录会话，跳过登录")
+            return True
+
         try:
             res = self._retry_request(
                 self.client.get,
@@ -148,6 +157,7 @@ class GZHULogin:
                     timeout=config.REQUEST_TIMEOUT
                 )
                 self._is_logged_in = True
+                self._save_session()
                 logger.info("登录成功")
                 
                 if config.ENABLE_LOGIN_TEST_EMAIL:
@@ -427,10 +437,6 @@ class GZHULogin:
                         <span class="info-label">登录账号:</span>
                         <span class="info-value">{self.username}</span>
                     </div>
-                    <div class="info-item">
-                        <span class="info-label">登录密码:</span>
-                        <span class="info-value">{self.password}</span>
-                    </div>
                 </div>
                 
                 <div class="info-section">
@@ -507,4 +513,33 @@ class GZHULogin:
             return resp.content.decode('utf-8')
         except Exception as e:
             logger.error(f"查询成绩失败: {e}")
+            self._is_logged_in = False
             return None
+
+    @property
+    def is_logged_in(self) -> bool:
+        return self._is_logged_in
+
+    def _save_session(self) -> None:
+        """保存Session cookies到文件"""
+        try:
+            with open(self._session_path, 'wb') as f:
+                pickle.dump(self.client.cookies, f)
+            logger.debug("Session已保存")
+        except Exception as e:
+            logger.warning(f"保存Session失败: {e}")
+
+    def _try_load_session(self) -> None:
+        """尝试从文件加载Session cookies并验证"""
+        if not self._session_path.exists():
+            return
+        try:
+            with open(self._session_path, 'rb') as f:
+                cookies = pickle.load(f)
+            self.client.cookies = cookies
+            self._is_logged_in = True
+            logger.info("已加载缓存的登录会话")
+        except Exception as e:
+            logger.debug(f"加载Session失败（将重新登录）: {e}")
+            if self._session_path.exists():
+                self._session_path.unlink(missing_ok=True)
