@@ -208,7 +208,6 @@ class GZHULogin:
                 username=self.username,
                 login_time=login_time,
                 ip_info=ip_info_dict,
-                device_info=device_info_dict,
                 scores=scores,
             )
 
