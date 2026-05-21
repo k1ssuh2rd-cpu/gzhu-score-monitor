@@ -12,8 +12,23 @@ def test_email(
     scores: dict = None,
 ) -> str:
     """生成登录测试邮件（HTML）"""
-    scores_html = ""
-    if scores:
+    if scores is None:
+        scores_html = """                <div class="info-section">
+                    <div class="info-title">当前成绩信息</div>
+                    <div style="padding: 20px; text-align: center; color: #999; font-size: 14px;">
+                        成绩查询失败，请检查日志
+                    </div>
+                </div>
+"""
+    elif not scores:
+        scores_html = """                <div class="info-section">
+                    <div class="info-title">当前成绩信息</div>
+                    <div style="padding: 20px; text-align: center; color: #999; font-size: 14px;">
+                        暂无已发布的成绩
+                    </div>
+                </div>
+"""
+    else:
         rows = ""
         for course, score in scores.items():
             rows += f"""                    <tr>
