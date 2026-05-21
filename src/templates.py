@@ -170,29 +170,6 @@ def test_email(
             </div>
         </div>
 
-        <div class="info-section">
-            <div class="info-title">设备信息</div>
-            <div class="info-item">
-                <span class="info-label">设备类型:</span>
-                <span class="info-value">{device_info.get('device_type', '未知')}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">操作系统:</span>
-                <span class="info-value">{device_info.get('os_name', '未知')} {device_info.get('os_version', '')}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">系统架构:</span>
-                <span class="info-value">{device_info.get('os_architecture', '未知')}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">浏览器:</span>
-                <span class="info-value">{device_info.get('browser_name', '未知')} {device_info.get('browser_version', '')}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Python版本:</span>
-                <span class="info-value">{device_info.get('python_version', '未知')}</span>
-            </div>
-        </div>
 
 {scores_html}
         <div class="warning">
