@@ -34,22 +34,19 @@ def main() -> None:
         print()
         print("=" * 40)
         print("1 - 查本学期成绩")
-        print("2 - 查上学期成绩")
-        print("3 - 查其他学期（方向键选择）")
-        print("4 - 开启持续监测（成绩变化自动发邮件）")
-        print("5 - 退出")
+        print("2 - 查其他学期（方向键选择）")
+        print("3 - 开启持续监测（成绩变化自动发邮件）")
+        print("4 - 退出")
         print("=" * 40)
         choice = input("> ").strip()
 
         if choice == "1":
             _run("--once")
         elif choice == "2":
-            _run("--once", "--last-semester")
-        elif choice == "3":
             _run("--once", "--semester")
-        elif choice == "4":
+        elif choice == "3":
             _run()
-        elif choice == "5":
+        elif choice == "4":
             break
         else:
             print("无效选项，请重新输入")

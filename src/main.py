@@ -4,9 +4,9 @@
 import argparse
 import json
 import os
-import time
 import signal
 import sys
+import time
 from typing import Dict, Optional
 from datetime import datetime
 
@@ -21,15 +21,6 @@ from src.email_notifier import create_notifier, EmailSendError
 from src.templates import score_update, heartbeat, query_scores
 
 __version__ = "1.1.0"
-
-
-def _last_semester():
-    """根据当前月份推算上学期的 (xnm, xqm)。xqm: 3=第一学期(秋), 12=第二学期(春)"""
-    now = datetime.now()
-    if 2 <= now.month <= 7:
-        return str(now.year - 1), "3"    # 上学期 = 同年秋季 (9月-1月)
-    else:
-        return str(now.year - 1), "12"   # 上学期 = 去年春季 (3月-7月)
 
 
 def _get_key():
@@ -361,8 +352,8 @@ class ScoreMonitor:
         debug_file.write_text(data, encoding="utf-8")
         logger.debug(f"原始成绩数据已保存到 {debug_file}")
 
-    def run_once(self, xnm: str = None, xqm: str = None) -> None:
-        """查询一次成绩并打印结果"""
+    def run_once(self, xnm: str = None, xqm: str = None, send_email: bool = False) -> None:
+        """查询一次成绩并打印结果，指定 send_email 同时发邮件"""
         if xnm is not None:
             if not self._login_only():
                 logger.error("初始化失败")
@@ -374,8 +365,19 @@ class ScoreMonitor:
         if data:
             try:
                 self._print_score_report(data)
-            except (ScoreParseError, Exception):
+                if send_email:
+                    scores = parse_course_scores(data)
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self.notifier.send(
+                        subject=config.EMAIL_SUBJECT,
+                        body=query_scores(scores, now),
+                        is_html=True,
+                    )
+                    print(f"成绩邮件已发送（{len(scores)} 门课程）")
+            except ScoreParseError:
                 logger.error("解析成绩数据失败")
+            except EmailSendError:
+                logger.error("发送邮件失败")
         else:
             logger.error("查询成绩失败")
 
@@ -396,84 +398,6 @@ class ScoreMonitor:
             print("登录成功，测试邮件已发送")
         else:
             print("登录失败，请检查账号密码和网络连接")
-
-    def run_query(self, xnm: str = None, xqm: str = None) -> None:
-        """主动查询成绩并发送邮件"""
-        if xnm is not None:
-            if not self._login_only():
-                sys.exit(1)
-            data = self.gzhu_login.query_scores(xnm=xnm, xqm=xqm)
-            if not data:
-                logger.error("查询成绩失败")
-                sys.exit(1)
-            try:
-                scores = parse_course_scores(data)
-            except ScoreParseError:
-                logger.error("解析成绩数据失败")
-                sys.exit(1)
-        else:
-            if not self.initialize():
-                logger.error("初始化失败")
-                sys.exit(1)
-            scores = self.previous_scores
-
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        body = query_scores(scores, now)
-        try:
-            self.notifier.send(
-                subject=config.EMAIL_SUBJECT,
-                body=body,
-                is_html=True
-            )
-            logger.info(f"查询邮件发送成功，共 {len(scores)} 门课程")
-            print(f"查询完成，成绩邮件已发送（{len(scores)} 门课程）")
-        except EmailSendError:
-            logger.error("发送查询邮件失败")
-            sys.exit(1)
-
-    def run_check(self, xnm: str = None, xqm: str = None) -> None:
-        """CI模式：查询一次，对比上次状态，有变化则发邮件通知"""
-        suffix = f"_{xnm}_{xqm}" if xnm else ""
-        state_file = BASE_DIR / "status" / f"scores{suffix}.json"
-
-        if xnm is not None:
-            if not self._login_only():
-                sys.exit(1)
-        elif not self.initialize():
-            logger.error("初始化失败")
-            sys.exit(1)
-
-        previous_scores: Dict[str, str] = {}
-        if state_file.exists():
-            try:
-                previous_scores = json.loads(state_file.read_text(encoding="utf-8"))
-            except Exception:
-                pass
-
-        data = self.gzhu_login.query_scores(xnm=xnm, xqm=xqm)
-        if not data:
-            logger.error("查询成绩失败")
-            sys.exit(1)
-
-        try:
-            scores = parse_course_scores(data)
-        except ScoreParseError:
-            logger.error("解析成绩数据失败")
-            sys.exit(1)
-
-        if scores != previous_scores:
-            logger.info(f"检测到成绩变化 (上次{len(previous_scores)}门 → 本次{len(scores)}门)，发送通知...")
-            body = self._generate_score_update_email(scores, previous_scores)
-            try:
-                self.notifier.send(subject=config.EMAIL_SUBJECT, body=body, is_html=True)
-                logger.info("通知邮件发送成功")
-            except EmailSendError:
-                logger.error("发送通知邮件失败")
-                sys.exit(1)
-        else:
-            logger.info(f"成绩无变化 (共{len(scores)}门)")
-
-        state_file.write_text(json.dumps(scores, ensure_ascii=False), encoding="utf-8")
 
     def run(self) -> None:
         """
@@ -521,10 +445,8 @@ def main():
     parser = argparse.ArgumentParser(description="广州大学成绩监测系统")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--once", action="store_true", help="查询一次成绩并打印结果")
+    parser.add_argument("--email", action="store_true", help="配合 --once，同时发送邮件报告")
     parser.add_argument("--test", action="store_true", help="发送测试邮件验证配置并退出")
-    parser.add_argument("--check", action="store_true", help="CI模式：查询并对比上次，有变化则发邮件通知")
-    parser.add_argument("--query", action="store_true", help="查询成绩并发送到邮箱")
-    parser.add_argument("--last-semester", action="store_true", help="查询上学期成绩")
     parser.add_argument("--semester", action="store_true", help="交互式选择查询学期")
     args = parser.parse_args()
 
@@ -541,17 +463,11 @@ def main():
         if xnm is None:
             return
         print(f"已选择: {xnmmc} 学年第 {xqmmc} 学期\n")
-    elif args.last_semester:
-        xnm, xqm = _last_semester()
 
     if args.test:
         monitor.run_test()
     elif args.once:
-        monitor.run_once(xnm=xnm, xqm=xqm)
-    elif args.query:
-        monitor.run_query(xnm=xnm, xqm=xqm)
-    elif args.check:
-        monitor.run_check(xnm=xnm, xqm=xqm)
+        monitor.run_once(xnm=xnm, xqm=xqm, send_email=args.email)
     else:
         monitor.run()
 

@@ -19,10 +19,8 @@
 |------|------|------|
 | 持续监测 | `python -m src.main` | 后台循环检查，成绩变化自动发邮件 |
 | 只看一次 | `python -m src.main --once` | 查询一次，打印成绩单（含加权均分、绩点），不发邮件 |
-| 选择学期 | `python -m src.main --once --semester` | 方向键交互式选择学期，可搭配 `--once` / `--query` / `--check` |
-| 查上学期 | `python -m src.main --once --last-semester` | 快捷查上学期 |
-| 主动查询 | `python -m src.main --query` | 查询一次并发送邮件报告 |
-| CI 对比 | `python -m src.main --check` | 查询并对比上次状态，有变化才发邮件 |
+| 查看并发送 | `python -m src.main --once --email` | 查询一次，打印成绩单并发送邮件报告 |
+| 选择学期 | `python -m src.main --once --semester` | 方向键交互式选择学期，可搭配 `--email` |
 | 测试邮件 | `python -m src.main --test` | 登录一次并发送测试邮件验证配置 |
 | 诊断邮件 | `python scripts/test_smtp.py` | 诊断 SMTP 连接和邮件发送 |
 | 交互菜单 | `python scripts/menu.py` | 不用记命令，菜单选数字即可操作 |
@@ -285,37 +283,17 @@ python -m src.main --once
 
 直接打印你当前学期的完整成绩单，包含每门课的成绩、绩点、学分，以及加权均分和平均绩点。查完就退出，不发邮件。
 
-可以配合 `--semester` 选择其他学期，或配合 `--last-semester` 查上学期：
+可以配合 `--semester` 选择其他学期：
 
 ```bash
-python -m src.main --once --semester       # 方向键选择学期
-python -m src.main --once --last-semester  # 快速查上学期
+python -m src.main --once --semester    # 方向键选择学期
 ```
 
-### 方式C：查询成绩并发送邮件
+加上 `--email` 会同时把成绩发到邮箱：
 
 ```bash
-python -m src.main --query
-```
-
-查询一次当前学期成绩，然后**必定**发送邮件报告到你配置的邮箱。适合想主动看一眼成绩又留个记录的场景。
-
-同样可以配合 `--semester` 指定学期：
-
-```bash
-python -m src.main --query --semester
-```
-
-### 方式D：CI 对比模式
-
-```bash
-python -m src.main --check
-```
-
-查询成绩，和上次 `--check` 运行的结果做对比。**只有成绩发生变化时才发邮件**，没变化就只记日志不发邮件。适合配合定时任务（Windows 任务计划程序、crontab）使用。
-
-```bash
-python -m src.main --check --semester    # 指定学期对比
+python -m src.main --once --email              # 查本学期并发送邮件
+python -m src.main --once --semester --email   # 选学期并发送邮件
 ```
 
 ---
@@ -326,16 +304,12 @@ python -m src.main --check --semester    # 指定学期对比
 
 | 参数 | 说明 |
 |------|------|
-| `--once` | 查询一次，打印成绩单（含加权均分、绩点），不发邮件 |
-| `--query` | 查询一次，**必定**发送邮件到邮箱 |
-| `--check` | 查询并对比上次状态，**有变化才发邮件**（状态保存在 `status/` 目录） |
+| `--once` | 查询一次，打印成绩单（含加权均分、绩点） |
+| `--email` | 配合 `--once`，同时发送邮件报告 |
 | `--test` | 登录教务系统，成功后发送测试邮件验证邮件配置 |
-| `--semester` | 交互式选择学期（方向键 ↑↓ 移动，回车确认，Esc 取消） |
-| `--last-semester` | 查询上学期成绩（快捷方式，省去手动选学期） |
+| `--semester` | 交互式选择学期（方向键 ↑↓ 移动，回车确认，Esc 取消），配合 `--once` 使用 |
 | `--version` | 显示版本号 |
 | `--help` | 显示所有参数的帮助信息 |
-
-`--semester` 和 `--last-semester` 可以搭配 `--once`、`--query`、`--check` 使用。
 
 ### 交互式菜单
 
@@ -345,7 +319,7 @@ python -m src.main --check --semester    # 指定学期对比
 python scripts/menu.py
 ```
 
-菜单选项：查本学期 / 查上学期 / 选学期查 / 持续监测。
+菜单选项：查本学期 / 选学期查 / 持续监测。
 
 ### 诊断 SMTP
 
