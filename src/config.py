@@ -21,7 +21,7 @@ class Config:
         email.strip() for email in os.getenv("RECEIVER_EMAILS", "").split(",") if email.strip()
     ]
     TEST_EMAIL: str = os.getenv("TEST_EMAIL", "")
-    CHECK_INTERVAL: int = int(os.getenv("CHECK_INTERVAL", "5"))
+    CHECK_INTERVAL: int = int(os.getenv("CHECK_INTERVAL", "300"))
     EMAIL_SUBJECT: str = os.getenv("EMAIL_SUBJECT", "新成绩通知")
     ENABLE_LOGIN_TEST_EMAIL: bool = os.getenv("ENABLE_LOGIN_TEST_EMAIL", "true").lower() == "true"
 

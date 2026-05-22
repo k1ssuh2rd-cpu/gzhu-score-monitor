@@ -2,13 +2,12 @@
 广州大学教务系统登录模块
 """
 import json
-import logging
 import pickle
 import re
+import ssl
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional
 import requests
 import execjs
 from lxml import html
@@ -52,7 +51,7 @@ class GZHULogin:
     
     CAS_LOGIN_URL = 'https://newcas.gzhu.edu.cn/cas/login'
     JWXT_LOGIN_URL = 'http://jwxt.gzhu.edu.cn/sso/driot4login'
-    SCORE_QUERY_URL = 'https://jwxt.gzhu.edu.cn/jwglxt/cjcx/cjcx_cxDgXscj.html'
+    SCORE_QUERY_URL = 'http://jwxt.gzhu.edu.cn/jwglxt/cjcx/cjcx_cxDgXscj.html'
     
     HEADERS = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:94.0) Gecko/20100101 Firefox/94.0',
@@ -74,12 +73,28 @@ class GZHULogin:
         self.username = username
         self.password = password
         self.client = requests.Session()
+        self._mount_tls_adapter()
         self._is_logged_in = False
         self.email_notifier = email_notifier
         self._session_path = BASE_DIR / "status" / "session.pkl"
         self._session_path.parent.mkdir(parents=True, exist_ok=True)
         self._try_load_session()
-    
+
+    def _mount_tls_adapter(self) -> None:
+        """挂载降级 TLS 适配器，兼容教务系统老旧 SSL 配置"""
+        from requests.adapters import HTTPAdapter
+
+        class TLSAdapter(HTTPAdapter):
+            def init_poolmanager(self, *args, **kwargs):
+                ctx = ssl.create_default_context()
+                ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                kwargs['ssl_context'] = ctx
+                return super().init_poolmanager(*args, **kwargs)
+
+        self.client.mount('https://', TLSAdapter())
+
     def _retry_request(self, func, *args, **kwargs):
         """
         带重试机制的请求方法
@@ -209,34 +224,107 @@ class GZHULogin:
                 logger.error("登录测试邮件发送失败")
         except Exception as e:
             logger.error(f"发送登录测试邮件时发生错误: {e}")
-    def query_scores(self) -> Optional[str]:
+    def query_scores(self, xnm: str = None, xqm: str = None) -> Optional[str]:
         """
-        查询成绩数据
-        
+        查询成绩数据（POST 方式，一次拉取全部成绩）。
+
+        Args:
+            xnm: 学年，如 '2025' 表示 2025-2026 学年
+            xqm: 学期，'3'=第一学期(秋), '12'=第二学期(春)。不传则查本学期
+
         Returns:
             成绩JSON字符串，失败返回None
         """
         if not self._is_logged_in:
             logger.error("未登录，请先调用login()方法")
             return None
-        
-        try:
-            url = f"{self.SCORE_QUERY_URL}?doType=query&gnmkdm=N305005&layout=default&su={self.username}"
-            resp = self._retry_request(
-                self.client.get,
-                url,
-                headers=self.BASE_HEADERS,
-                timeout=config.REQUEST_TIMEOUT
-            )
-            return resp.content.decode('utf-8')
-        except Exception as e:
-            logger.error(f"查询成绩失败: {e}")
-            self._is_logged_in = False
-            return None
+
+        url = f"{self.SCORE_QUERY_URL}?doType=query&gnmkdm=N305005&layout=default&su={self.username}"
+        form_data = {
+            '_search': 'false',
+            'queryModel.showCount': '100',
+            'queryModel.currentPage': '1',
+            'queryModel.sortName': '',
+            'queryModel.sortOrder': 'asc',
+            'time': '0',
+        }
+        if xnm is not None and xqm is not None:
+            form_data['xnm'] = xnm
+            form_data['xqm'] = xqm
+
+        for attempt in range(2):
+            try:
+                resp = self._retry_request(
+                    self.client.post, url,
+                    data=form_data,
+                    headers=self.BASE_HEADERS,
+                    timeout=config.REQUEST_TIMEOUT
+                )
+                text = resp.content.decode('utf-8')
+                if text.strip().startswith('{') or text.strip().startswith('['):
+                    return text
+                logger.warning("查询返回非JSON，session可能已过期，尝试重新登录...")
+                self._is_logged_in = False
+                if self._session_path.exists():
+                    self._session_path.unlink(missing_ok=True)
+                if not self.login():
+                    return None
+            except json.JSONDecodeError:
+                logger.warning("JSON解析失败，session可能已过期，尝试重新登录...")
+                self._is_logged_in = False
+                if self._session_path.exists():
+                    self._session_path.unlink(missing_ok=True)
+                if not self.login():
+                    return None
+            except Exception as e:
+                logger.error(f"查询成绩失败: {e}")
+                self._is_logged_in = False
+                return None
+
+        return None
 
     @property
     def is_logged_in(self) -> bool:
         return self._is_logged_in
+
+    def get_available_semesters(self) -> list[dict]:
+        """
+        获取可选学期列表。根据学号推算入学年份，生成入学以来所有学期。
+
+        Returns:
+            [{"xnm": "2025", "xnmmc": "2025-2026", "xqm": "3", "xqmmc": "1"}, ...]
+        """
+        semesters = self._guess_semesters()
+        if semesters:
+            return semesters
+        logger.warning("无法推算学期列表")
+        return []
+
+    def _guess_semesters(self) -> list[dict]:
+        """根据学号推算入学年份，生成入学以来所有学期"""
+        now = datetime.now()
+        cur_year = now.year
+        if now.month >= 8:
+            cur_xnm = cur_year
+        else:
+            cur_xnm = cur_year - 1
+        enroll_year = 2000 + int(self.username[1:3])
+
+        result = []
+        for year in range(cur_xnm, enroll_year - 1, -1):
+            result.append({
+                "xnm": str(year),
+                "xnmmc": f"{year}-{year+1}",
+                "xqm": "12",
+                "xqmmc": "2",
+            })
+            result.append({
+                "xnm": str(year),
+                "xnmmc": f"{year}-{year+1}",
+                "xqm": "3",
+                "xqmmc": "1",
+            })
+        return result
 
     def _save_session(self) -> None:
         """保存Session cookies到文件"""

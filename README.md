@@ -11,11 +11,21 @@
 
 ## 这个工具能做什么？
 
-教务系统出新成绩时你自己是不知道的，总得隔三差五打开查，很烦。这个工具帮你盯着 —— 它每隔 6 小时自动登录教务系统查一次，如果分数有变化，就给你发邮件通知。你什么都不用管，有新成绩会自动收到邮件。
+教务系统出新成绩时你自己是不知道的，总得隔三差五打开查，很烦。这个工具帮你盯着 —— 它每隔 5 分钟自动登录教务系统查一次，如果分数有变化，就给你发邮件通知。你什么都不用管，有新成绩会自动收到邮件。
 
-两种用法：
-- **在自己电脑上跑**：程序在后台挂着，电脑开机就在查
-- **只看一次成绩**：查一次打印结果，不持续运行
+支持以下模式：
+
+| 模式 | 命令 | 说明 |
+|------|------|------|
+| 持续监测 | `python -m src.main` | 后台循环检查，成绩变化自动发邮件 |
+| 只看一次 | `python -m src.main --once` | 查询一次，打印成绩单（含加权均分、绩点），不发邮件 |
+| 选择学期 | `python -m src.main --once --semester` | 方向键交互式选择学期，可搭配 `--once` / `--query` / `--check` |
+| 查上学期 | `python -m src.main --once --last-semester` | 快捷查上学期 |
+| 主动查询 | `python -m src.main --query` | 查询一次并发送邮件报告 |
+| CI 对比 | `python -m src.main --check` | 查询并对比上次状态，有变化才发邮件 |
+| 测试邮件 | `python -m src.main --test` | 登录一次并发送测试邮件验证配置 |
+| 诊断邮件 | `python scripts/test_smtp.py` | 诊断 SMTP 连接和邮件发送 |
+| 交互菜单 | `python scripts/menu.py` | 不用记命令，菜单选数字即可操作 |
 
 ---
 
@@ -245,7 +255,7 @@ python -m src.main --test
 
 ---
 
-## 第七步：开始监测
+## 第七步：选择你的运行模式
 
 ### 方式A：持续监测（推荐，电脑长期开着）
 
@@ -258,22 +268,118 @@ python -m src.main
 ```
 初始化完成，当前共有 42 门课程成绩
 开始监控成绩变化...
-检查间隔: 21600 秒
+检查间隔: 300 秒
 ```
 
-这说明程序已经在后台跑着了。每隔 6 小时它会自动查一次，有新成绩就发邮件。
+这说明程序已经在后台跑着了。每隔 5 分钟它会自动查一次，有新成绩就发邮件。程序还会定期发送**心跳邮件**确认自己还在正常运行（默认每 24 小时）。
 
 **要停止的时候**，在这个窗口里按 `Ctrl + C`。
 
 > 这个窗口不能关。关了程序也就停了。你可以把它最小化，不影响你干别的。
 
-### 方式B：只看一次成绩
+### 方式B：只看一次成绩（打印结果，不发邮件）
 
 ```bash
 python -m src.main --once
 ```
 
-执行一次，打印你当前所有课程的成绩，然后退出。不会发邮件。
+直接打印你当前学期的完整成绩单，包含每门课的成绩、绩点、学分，以及加权均分和平均绩点。查完就退出，不发邮件。
+
+可以配合 `--semester` 选择其他学期，或配合 `--last-semester` 查上学期：
+
+```bash
+python -m src.main --once --semester       # 方向键选择学期
+python -m src.main --once --last-semester  # 快速查上学期
+```
+
+### 方式C：查询成绩并发送邮件
+
+```bash
+python -m src.main --query
+```
+
+查询一次当前学期成绩，然后**必定**发送邮件报告到你配置的邮箱。适合想主动看一眼成绩又留个记录的场景。
+
+同样可以配合 `--semester` 指定学期：
+
+```bash
+python -m src.main --query --semester
+```
+
+### 方式D：CI 对比模式
+
+```bash
+python -m src.main --check
+```
+
+查询成绩，和上次 `--check` 运行的结果做对比。**只有成绩发生变化时才发邮件**，没变化就只记日志不发邮件。适合配合定时任务（Windows 任务计划程序、crontab）使用。
+
+```bash
+python -m src.main --check --semester    # 指定学期对比
+```
+
+---
+
+## 完整命令参考
+
+### 所有命令行参数
+
+| 参数 | 说明 |
+|------|------|
+| `--once` | 查询一次，打印成绩单（含加权均分、绩点），不发邮件 |
+| `--query` | 查询一次，**必定**发送邮件到邮箱 |
+| `--check` | 查询并对比上次状态，**有变化才发邮件**（状态保存在 `status/` 目录） |
+| `--test` | 登录教务系统，成功后发送测试邮件验证邮件配置 |
+| `--semester` | 交互式选择学期（方向键 ↑↓ 移动，回车确认，Esc 取消） |
+| `--last-semester` | 查询上学期成绩（快捷方式，省去手动选学期） |
+| `--version` | 显示版本号 |
+| `--help` | 显示所有参数的帮助信息 |
+
+`--semester` 和 `--last-semester` 可以搭配 `--once`、`--query`、`--check` 使用。
+
+### 交互式菜单
+
+如果不想记命令，运行菜单脚本，选数字就行：
+
+```bash
+python scripts/menu.py
+```
+
+菜单选项：查本学期 / 查上学期 / 选学期查 / 持续监测。
+
+### 诊断 SMTP
+
+```bash
+python scripts/test_smtp.py    # 诊断 SMTP：逐步验证 SSL 连接 → 登录 → 发送
+```
+
+### pip install 安装（可选）
+
+如果你熟悉 Python，可以用 `pip install` 安装本项目，之后就能用短命令：
+
+```bash
+pip install .                     # 在项目根目录执行
+gzhu-monitor                      # = python -m src.main
+gzhu-monitor --once --semester    # = python -m src.main --once --semester
+gzhu-test-smtp                    # = python scripts/test_smtp.py
+```
+
+---
+
+## 心跳邮件
+
+持续监测模式下，程序会定期发送**心跳邮件**来确认自己还在正常运行。如果你突然收不到心跳邮件了，说明程序可能已经停止或崩溃。
+
+心跳邮件内容包括：程序运行状态、距上次心跳的时间、当前监测的课程数。
+
+在 `.env` 中配置：
+
+```
+HEARTBEAT_ENABLED=true      # 开启心跳邮件（默认 true）
+HEARTBEAT_INTERVAL=86400    # 心跳间隔秒数，86400 = 24小时
+```
+
+只想监测成绩、不需要心跳的话，把 `HEARTBEAT_ENABLED` 设为 `false`。
 
 ---
 
@@ -316,7 +422,7 @@ crontab -e
 | `QQ_AUTH_CODE` | ✓ | - | QQ 邮箱 SMTP 授权码（第四步拿到的） |
 | `RECEIVER_EMAILS` | ✓ | - | 收通知的邮箱，多个用英文逗号分隔 |
 | `TEST_EMAIL` | | 和 RECEIVER_EMAILS 一样 | 测试邮件的收件地址 |
-| `CHECK_INTERVAL` | | 21600（6小时） | 检查间隔，单位秒 |
+| `CHECK_INTERVAL` | | 300（5分钟） | 检查间隔，单位秒 |
 | `EMAIL_SUBJECT` | | 新成绩通知 | 通知邮件的标题 |
 | `ENABLE_LOGIN_TEST_EMAIL` | | true | 登录后是否自动发测试邮件 |
 | `HEARTBEAT_ENABLED` | | true | 是否定期发心跳邮件确认程序正常 |
@@ -327,19 +433,21 @@ crontab -e
 ## 项目结构
 
 ```
-├── pyproject.toml              # 项目元数据，不用管
+├── pyproject.toml              # 项目元数据
 ├── requirements.txt            # Python 依赖列表
 ├── scripts/                    # 辅助工具
-│   ├── test_smtp.py            # SMTP 连通性诊断工具
+│   ├── menu.py                 # 交互式菜单，选数字操作
+│   └── test_smtp.py            # SMTP 连通性诊断工具
 ├── src/                        # 核心代码
-│   ├── main.py                 # 主程序入口
-│   ├── gzhu_login.py           # 教务系统登录
-│   ├── score_parser.py         # 成绩解析
-│   ├── email_notifier.py       # 邮件发送
-│   ├── templates.py            # 邮件 HTML 模板
-│   └── config.py               # 配置加载
-├── logs/                       # 运行日志（自动生成）
-└── status/                     # 成绩快照和登录状态（自动生成）
+│   ├── main.py                 # 主程序入口（argparse 命令行、ScoreMonitor）
+│   ├── gzhu_login.py           # 教务系统 CAS 登录、session 缓存、成绩查询
+│   ├── score_parser.py         # 成绩 JSON 解析、加权均分 & GPA 计算
+│   ├── email_notifier.py       # QQ 邮箱 SMTP 发送（SSL 465 端口）
+│   ├── templates.py            # 邮件 HTML 模板（测试/成绩更新/心跳/查询报告）
+│   ├── config.py               # .env 配置加载
+│   └── logger.py               # 日志配置（DEBUG→文件, INFO→控制台）
+├── logs/                       # 运行日志和调试数据（自动生成，不提交 git）
+└── status/                     # session 缓存和成绩快照（自动生成，不提交 git）
 ```
 
 ---
@@ -364,19 +472,17 @@ python scripts/test_smtp.py
 
 ### 成绩更新了但没收到通知？
 
-1. 程序是**每 6 小时**查一次，不是秒级更新的，耐心等一等
+1. 程序是**每 5 分钟**查一次，耐心等一等
 2. 检查 `logs/score_monitor.log`，确认程序还在正常运行
 3. 到邮箱的**垃圾邮件**文件夹翻一翻，有时通知邮件会被误判为垃圾邮件
 
 ### 能改检查频率吗？
 
-可以。打开 `.env` 文件，改 `CHECK_INTERVAL` 的值。这个值的单位是**秒**：
+可以。打开 `.env` 文件，改 `CHECK_INTERVAL` 的值。这个值的单位是**秒**，默认 300（5分钟）：
 
+- 想每 1 分钟查一次：填 `60`
+- 想每 10 分钟查一次：填 `600`
 - 想每 1 小时查一次：填 `3600`
-- 想每 3 小时查一次：填 `10800`
-- 想每 12 小时查一次：填 `43200`
-
-> ⚠️ 不建议设太短（比如几分钟），太频繁的请求可能会被教务系统封 IP。
 
 ### cmd 窗口关了就停了怎么办？
 
