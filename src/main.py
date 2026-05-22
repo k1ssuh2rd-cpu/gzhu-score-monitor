@@ -365,9 +365,6 @@ def main():
     parser.add_argument("--test", action="store_true", help="发送测试邮件验证配置并退出")
     parser.add_argument("--check", action="store_true", help="CI模式：查询并对比上次，有变化则发邮件通知")
     parser.add_argument("--query", action="store_true", help="查询成绩并发送到邮箱")
-    parser.add_argument("--bot", action="store_true", help="启动 Telegram Bot")
-    parser.add_argument("--set-webhook", type=str, default="", metavar="URL", help="设置 Telegram Webhook URL")
-    parser.add_argument("--poll-telegram", action="store_true", help="GitHub Actions 轮询 Telegram 消息一次")
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -383,26 +380,6 @@ def main():
         monitor.run_query()
     elif args.check:
         monitor.run_check()
-    elif args.set_webhook:
-        from src.telegram_bot import set_webhook
-        set_webhook(config.TELEGRAM_BOT_TOKEN, args.set_webhook)
-    elif args.poll_telegram:
-        from src.telegram_bot import poll_once
-        token = config.TELEGRAM_BOT_TOKEN
-        if not token:
-            print("未配置 TELEGRAM_BOT_TOKEN，请在 .env 中添加")
-            sys.exit(1)
-        if poll_once(token):
-            monitor.run_query()
-    elif args.bot:
-        from src.telegram_bot import TelegramBot, build_check_handler
-        token = config.TELEGRAM_BOT_TOKEN
-        if not token:
-            print("未配置 TELEGRAM_BOT_TOKEN，请在 .env 中添加")
-            sys.exit(1)
-        handler = build_check_handler()
-        bot = TelegramBot(token, handler)
-        bot.run()
     else:
         monitor.run()
 

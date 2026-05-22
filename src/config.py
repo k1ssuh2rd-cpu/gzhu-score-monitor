@@ -28,9 +28,6 @@ class Config:
     HEARTBEAT_ENABLED: bool = os.getenv("HEARTBEAT_ENABLED", "true").lower() == "true"
     HEARTBEAT_INTERVAL: int = int(os.getenv("HEARTBEAT_INTERVAL", "86400"))
 
-    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    GITHUB_PAT: str = os.getenv("GITHUB_PAT", "")
-
     LOG_DIR: Path = BASE_DIR / "logs"
     LOG_DIR.mkdir(exist_ok=True)
     LOG_FILE: Path = LOG_DIR / "score_monitor.log"
