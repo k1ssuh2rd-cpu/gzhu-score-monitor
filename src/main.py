@@ -344,6 +344,7 @@ def main():
     parser.add_argument("--once", action="store_true", help="查询一次成绩并打印结果")
     parser.add_argument("--test", action="store_true", help="发送测试邮件验证配置并退出")
     parser.add_argument("--check", action="store_true", help="CI模式：查询并对比上次，有变化则发邮件通知")
+    parser.add_argument("--bot", action="store_true", help="启动 Telegram Bot")
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -357,6 +358,15 @@ def main():
         monitor.run_once()
     elif args.check:
         monitor.run_check()
+    elif args.bot:
+        from src.telegram_bot import TelegramBot, build_check_handler
+        token = config.TELEGRAM_BOT_TOKEN
+        if not token:
+            print("未配置 TELEGRAM_BOT_TOKEN，请在 .env 中添加")
+            sys.exit(1)
+        handler = build_check_handler()
+        bot = TelegramBot(token, handler)
+        bot.run()
     else:
         monitor.run()
 
