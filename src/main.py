@@ -14,7 +14,6 @@ from src.logger import logger
 from src.gzhu_login import GZHULogin, GZHULoginError
 from src.score_parser import parse_course_scores, format_scores, ScoreParseError
 from src.email_notifier import create_notifier, EmailSendError
-from src.email_status_tracker import EmailStatusTracker
 from src.templates import score_update, heartbeat, query_scores
 
 __version__ = "1.1.0"
@@ -28,7 +27,6 @@ class ScoreMonitor:
     def __init__(self):
         self.gzhu_login: Optional[GZHULogin] = None
         self.notifier = create_notifier()
-        self.status_tracker = EmailStatusTracker()
         self.previous_score_count = 0
         self.previous_scores: Dict[str, str] = {}
         self.running = False
@@ -54,13 +52,12 @@ class ScoreMonitor:
             config.GZHU_USERNAME,
             config.GZHU_PASSWORD,
             email_notifier=self.notifier,
-            status_tracker=self.status_tracker
         )
-        
+
         if not self.gzhu_login.login():
             logger.error("登录失败，请检查账号密码")
             return False
-        
+
         initial_data = self.gzhu_login.query_scores()
         if initial_data:
             try:
@@ -116,31 +113,8 @@ class ScoreMonitor:
                     )
                     self.previous_score_count = current_count
                     self.previous_scores = scores.copy()
-                    if self.status_tracker:
-                        self.status_tracker.add_status(
-                            email_type="score",
-                            subject=config.EMAIL_SUBJECT,
-                            recipients=self.notifier.receiver_emails,
-                            status="success",
-                            additional_info={
-                                "previous_count": len(self.previous_scores),
-                                "current_count": current_count,
-                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            }
-                        )
                 except EmailSendError:
                     logger.error("发送通知邮件失败")
-                    if self.status_tracker:
-                        self.status_tracker.add_status(
-                            email_type="score",
-                            subject=config.EMAIL_SUBJECT,
-                            recipients=self.notifier.receiver_emails,
-                            status="failed",
-                            error_message="邮件发送失败",
-                            additional_info={
-                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            }
-                        )
             else:
                 logger.debug("成绩无变化")
                 
@@ -198,30 +172,8 @@ class ScoreMonitor:
                 )
                 self.last_heartbeat_time = current_time
                 logger.info("心跳邮件发送成功")
-                if self.status_tracker:
-                    self.status_tracker.add_status(
-                        email_type="heartbeat",
-                        subject="[心跳] 成绩监测系统运行正常",
-                        recipients=self.notifier.receiver_emails,
-                        status="success",
-                        additional_info={
-                            "timestamp": current_time.strftime("%Y-%m-%d %H:%M:%S"),
-                            "course_count": self.previous_score_count
-                        }
-                    )
             except EmailSendError as e:
                 logger.error(f"心跳邮件发送失败: {e}")
-                if self.status_tracker:
-                    self.status_tracker.add_status(
-                        email_type="heartbeat",
-                        subject="[心跳] 成绩监测系统运行正常",
-                        recipients=self.notifier.receiver_emails,
-                        status="failed",
-                        error_message=str(e),
-                        additional_info={
-                            "timestamp": current_time.strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                    )
     
     def run_once(self) -> None:
         """查询一次成绩并打印结果"""
@@ -250,7 +202,6 @@ class ScoreMonitor:
             config.GZHU_USERNAME,
             config.GZHU_PASSWORD,
             email_notifier=self.notifier,
-            status_tracker=self.status_tracker
         )
         if self.gzhu_login.login():
             print("登录成功，测试邮件已发送")

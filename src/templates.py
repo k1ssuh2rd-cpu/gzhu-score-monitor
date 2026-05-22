@@ -7,7 +7,6 @@ from typing import Dict
 def test_email(
     username: str,
     login_time: str,
-    ip_info: dict,
     scores: dict = None,
 ) -> str:
     """生成登录测试邮件（HTML）"""
@@ -203,10 +202,6 @@ def test_email(
             <div class="card-row">
                 <span class="card-label">登录账号</span>
                 <span class="card-value">{username}</span>
-            </div>
-            <div class="card-row">
-                <span class="card-label">登录 IP</span>
-                <span class="card-value">{ip_info.get('public_ip', '—')}</span>
             </div>
         </div>
 

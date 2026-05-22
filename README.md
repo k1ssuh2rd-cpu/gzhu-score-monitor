@@ -304,16 +304,6 @@ crontab -e
 
 ---
 
-## 邮件管理后台
-
-程序内置了一个简单的管理后台，可以查看邮件发送记录：
-
-```bash
-python -m scripts.admin
-```
-
----
-
 ## 完整配置说明
 
 `.env` 文件里所有可以改的选项（不改就用默认值，也很正常）：
@@ -341,7 +331,6 @@ python -m scripts.admin
 ├── requirements.txt            # Python 依赖列表
 ├── scripts/                    # 辅助工具
 │   ├── test_smtp.py            # SMTP 连通性诊断工具
-│   └── admin.py                # 邮件发送记录管理
 ├── src/                        # 核心代码
 │   ├── main.py                 # 主程序入口
 │   ├── gzhu_login.py           # 教务系统登录

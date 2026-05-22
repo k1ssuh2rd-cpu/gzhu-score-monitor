@@ -14,10 +14,7 @@ import execjs
 from lxml import html
 from src.config import config, BASE_DIR
 from src.logger import logger
-from src.device_info import DeviceInfo
-from src.ip_address import IPAddress
 from src.email_notifier import EmailNotifier, EmailSendError
-from src.email_status_tracker import EmailStatusTracker
 from src.templates import test_email as test_email_template
 
 
@@ -73,14 +70,12 @@ class GZHULogin:
         username: str,
         password: str,
         email_notifier: Optional[EmailNotifier] = None,
-        status_tracker: Optional[EmailStatusTracker] = None
     ):
         self.username = username
         self.password = password
         self.client = requests.Session()
         self._is_logged_in = False
         self.email_notifier = email_notifier
-        self.status_tracker = status_tracker
         self._session_path = BASE_DIR / "status" / "session.pkl"
         self._session_path.parent.mkdir(parents=True, exist_ok=True)
         self._try_load_session()
@@ -174,27 +169,18 @@ class GZHULogin:
             return False
     
     def _send_login_test_email(self) -> None:
-        """
-        发送登录测试邮件
-        """
         try:
             if not self.email_notifier:
                 logger.warning("邮件通知器未配置，跳过发送测试邮件")
                 return
-            
+
             test_email = config.TEST_EMAIL or self.email_notifier.receiver_emails[0]
             if not test_email:
                 logger.warning("测试邮箱地址未配置，跳过发送测试邮件")
                 return
-            
+
             login_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            device_info = DeviceInfo(self.BASE_HEADERS.get('User-Agent'))
-            ip_address = IPAddress()
-            
-            device_info_dict = device_info.get_all_info()
-            ip_info_dict = ip_address.get_ip_info()
-            
+
             scores_data = self.query_scores()
             scores = None
             if scores_data:
@@ -203,16 +189,14 @@ class GZHULogin:
                     scores = parse_course_scores(scores_data)
                 except Exception as e:
                     logger.warning(f"解析成绩数据失败: {e}")
-            
+
             email_body = test_email_template(
                 username=self.username,
                 login_time=login_time,
-                ip_info=ip_info_dict,
                 scores=scores,
             )
 
             subject = f"登录测试通知 - {self.username} - {login_time}"
-
             original_recipients = self.email_notifier.receiver_emails
             self.email_notifier.receiver_emails = [test_email]
 
@@ -220,50 +204,9 @@ class GZHULogin:
                 self.email_notifier.send(subject=subject, body=email_body, is_html=True)
                 self.email_notifier.receiver_emails = original_recipients
                 logger.info(f"登录测试邮件发送成功: {test_email}")
-                if self.status_tracker:
-                    self.status_tracker.add_status(
-                        email_type="test",
-                        subject=subject,
-                        recipients=[test_email],
-                        status="success",
-                        additional_info={
-                            "username": self.username,
-                            "login_time": login_time,
-                            "ip_info": ip_info_dict,
-                            "device_info": device_info_dict,
-                            "scores_count": len(scores) if scores else 0,
-                        },
-                    )
             except EmailSendError:
                 self.email_notifier.receiver_emails = original_recipients
                 logger.error("登录测试邮件发送失败")
-                if self.status_tracker:
-                    self.status_tracker.add_status(
-                        email_type="test",
-                        subject=subject,
-                        recipients=[test_email],
-                        status="failed",
-                        error_message="邮件发送失败",
-                        additional_info={
-                            "username": self.username,
-                            "login_time": login_time,
-                        },
-                    )
-                    
-        except EmailSendError as e:
-            logger.error(f"登录测试邮件发送异常: {e}")
-            if self.status_tracker:
-                self.status_tracker.add_status(
-                    email_type="test",
-                    subject=f"登录测试通知 - {self.username}",
-                    recipients=[test_email] if 'test_email' in locals() else [],
-                    status="failed",
-                    error_message=str(e),
-                    additional_info={
-                        "username": self.username,
-                        "login_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                )
         except Exception as e:
             logger.error(f"发送登录测试邮件时发生错误: {e}")
     def query_scores(self) -> Optional[str]:

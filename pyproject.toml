@@ -18,7 +18,6 @@ dependencies = [
 [project.scripts]
 gzhu-monitor = "src.main:main"
 gzhu-test-smtp = "scripts.test_smtp:test_smtp_connection"
-gzhu-admin = "scripts.admin:main"
 
 [tool.setuptools.packages.find]
 include = ["src*", "scripts*"]
