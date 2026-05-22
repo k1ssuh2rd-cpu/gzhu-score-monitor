@@ -1,0 +1,13 @@
+# Cloudflare Worker 配置
+# 方式一（零安装）：直接打开 Cloudflare 网页后台 → Workers → 创建 → 粘贴 index.js → 部署
+# 方式二（命令行）：npx wrangler deploy
+
+name = "gzhu-score-bot"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+# 注意：如果用的方式一（网页部署），不需要下面的 secrets
+# 如果用的方式二（wrangler 部署），取消注释并运行:
+#   wrangler secret put TELEGRAM_BOT_TOKEN
+#   wrangler secret put GITHUB_PAT
+#   wrangler secret put GITHUB_REPO

@@ -13,9 +13,10 @@
 
 教务系统出新成绩时你自己是不知道的，总得隔三差五打开查，很烦。这个工具帮你盯着 —— 它每隔 6 小时自动登录教务系统查一次，如果分数有变化，就给你发邮件通知。你什么都不用管，有新成绩会自动收到邮件。
 
-两种用法：
+三种用法：
 - **在自己电脑上跑**：程序在后台挂着，电脑开机就在查
 - **用 GitHub Actions 跑**：Fork 到 GitHub 上，完全不需要自己开电脑，由 GitHub 的服务器帮你查
+- **Telegram Bot 随时查**：在手机/电脑上用 Telegram 发一条 `/check` 命令，立刻返回当前所有成绩
 
 ---
 
@@ -301,6 +302,58 @@ python -m src.main --once
 
 ---
 
+## Telegram Bot 随时查成绩
+
+除了被动等通知，你还可以**主动查成绩**——在手机上用 Telegram 发一条 `/check`，Bot 直接帮你触发 GitHub Actions 查成绩，结果发到你的邮箱。
+
+有两种部署方式，推荐方式 B（免费、无需自己开电脑）。
+
+### 方式 A：本地运行（电脑需要一直开机）
+
+1. 创建 Telegram Bot → `.env` 填 `TELEGRAM_BOT_TOKEN` → 跑 `python -m src.main --bot`
+2. 手机发 `/check` → 本地 Bot 直接查成绩并返回
+3. 关了电脑 Bot 就停
+
+### 方式 B：GitHub Actions 轮询（推荐，免费、24×7、无需服务器）
+
+原理：GitHub Actions 每 5 分钟自动查一次有没有人给 Bot 发了 `/check`，有就自动查成绩发邮件。
+
+不需要任何外部服务器，全部跑在 GitHub 上。**你只需要做两步：**
+
+#### 第一步：创建 Telegram Bot
+
+1. 打开 **Telegram**，搜 **`@BotFather`**（带蓝色勾的才是官方的）
+2. 发一条 **`/newbot`**，按提示起名字和用户名（必须以 `bot` 结尾）
+3. 拿到一串 **Bot Token**，类似 `8057655456:AAFcQyccg582ExDAZ2TZlcLADrNyp6t9oB0`
+4. 把 Token 填入 `.env` 的 `TELEGRAM_BOT_TOKEN`
+
+#### 第二步：在 GitHub Secrets 里添加 TELEGRAM_BOT_TOKEN
+
+1. 打开你 Fork 的仓库 → **Settings** → **Secrets and variables** → **Actions**
+2. 点 **"New repository secret"**
+3. Name 填 `TELEGRAM_BOT_TOKEN`，Secret 粘贴第一步拿到的 Token
+4. 点 **"Add secret"**
+
+搞定。GitHub 会每 5 分钟自动检查一次 Telegram 消息，看到 `/check` 就触发查询。手机发完 `/check` 后等几分钟，成绩就发到邮箱了。
+
+> 原理是用 GitHub Actions 的定时任务（cron）每 5 分钟拉取一次 Telegram 消息。第一次发 `/check` 后 Bot 会回复"查询已触发"。
+
+#### 搞定了！
+
+打开 Telegram，搜索你的 Bot，发一条 **`/check`**，Bot 会回复"查询已触发"，然后等十几秒，你的邮箱就会收到成绩邮件。
+
+支持的 Telegram 命令：
+
+| 命令 | 作用 |
+|------|------|
+| `/start` | 开始使用，显示欢迎信息 |
+| `/check` | 触发成绩查询，结果发送到邮箱 |
+| `/help` | 查看使用帮助 |
+
+> **不用再开电脑了。** 任何时候掏出手机发 `/check`，GitHub 的服务器帮你查。
+
+---
+
 ## 怎么让程序开机自启？
 
 ### Windows
@@ -355,6 +408,8 @@ python -m scripts.admin
 | `ENABLE_LOGIN_TEST_EMAIL` | | true | 登录后是否自动发测试邮件 |
 | `HEARTBEAT_ENABLED` | | true | 是否定期发心跳邮件确认程序正常 |
 | `HEARTBEAT_INTERVAL` | | 86400（24小时） | 心跳邮件间隔，单位秒 |
+| `TELEGRAM_BOT_TOKEN` | | 空（不启用） | Telegram Bot 的 token，填了才能用 Bot 功能 |
+| `GITHUB_PAT` | | 空 | GitHub Personal Access Token，webhook 方式触发 Actions 需要 |
 
 ---
 
@@ -363,6 +418,12 @@ python -m scripts.admin
 ```
 ├── pyproject.toml              # 项目元数据，不用管
 ├── requirements.txt            # Python 依赖列表
+├── .github/workflows/          # GitHub Actions 工作流
+│   ├── check.yml               # 定时 + 手动触发检查成绩
+│   └── query.yml               # Bot 触发的主动查询
+├── workers/telegram-webhook/   # Cloudflare Worker（Telegram → GitHub）
+│   ├── index.js                # Worker 代码
+│   └── wrangler.toml           # Worker 配置
 ├── scripts/                    # 辅助工具
 │   ├── test_smtp.py            # SMTP 连通性诊断工具
 │   └── admin.py                # 邮件发送记录管理
@@ -371,6 +432,7 @@ python -m scripts.admin
 │   ├── gzhu_login.py           # 教务系统登录
 │   ├── score_parser.py         # 成绩解析
 │   ├── email_notifier.py       # 邮件发送
+│   ├── telegram_bot.py         # Telegram Bot
 │   ├── templates.py            # 邮件 HTML 模板
 │   └── config.py               # 配置加载
 ├── logs/                       # 运行日志（自动生成）

@@ -146,3 +146,101 @@ def build_check_handler():
         return "\n".join(lines)
 
     return handler
+
+
+def set_webhook(token: str, url: str) -> None:
+    """注册 Telegram webhook，让 Telegram 把消息推送到指定 URL"""
+    api_url = f"https://api.telegram.org/bot{token}/setWebhook"
+    try:
+        resp = requests.post(api_url, json={"url": url}, timeout=15)
+        result = resp.json()
+        if result.get("ok"):
+            print(f"Webhook 设置成功 → {url}")
+        else:
+            print(f"Webhook 设置失败: {result}")
+    except Exception as e:
+        print(f"请求失败: {e}")
+
+
+def poll_once(token: str) -> bool:
+    """
+    GitHub Actions 轮询 Telegram 消息，处理 /check 命令。
+    读取偏移量 → 拉取新消息 → 回复 → 保存偏移量。
+    返回 True 表示有 /check 请求需要处理。
+    """
+    import json as _json
+    from pathlib import Path
+
+    status_dir = Path("status")
+    status_dir.mkdir(exist_ok=True)
+    offset_file = status_dir / "telegram_offset.json"
+
+    offset = 0
+    if offset_file.exists():
+        try:
+            offset = _json.loads(offset_file.read_text(encoding="utf-8")).get("offset", 0)
+        except Exception:
+            offset = 0
+
+    try:
+        resp = requests.get(
+            f"https://api.telegram.org/bot{token}/getUpdates",
+            params={"offset": offset, "timeout": 10, "limit": 10},
+            timeout=20
+        )
+        updates = resp.json().get("result", [])
+    except Exception:
+        return False
+
+    has_check = False
+    for update in updates:
+        update_id = update.get("update_id", 0)
+        msg = update.get("message")
+        if not msg:
+            if offset <= update_id:
+                offset = update_id + 1
+            continue
+
+        chat_id = msg.get("chat", {}).get("id")
+        text = (msg.get("text") or "").strip()
+        cmd = text.lower().split()[0] if text else ""
+
+        if chat_id:
+            if cmd == "/start":
+                _send_via_api(token, chat_id,
+                    '🎓 <b>广州大学成绩监测 Bot</b>\n\n'
+                    '发送 /check 触发成绩查询，结果将发送到你的邮箱。'
+                )
+            elif cmd == "/check":
+                has_check = True
+                _send_via_api(token, chat_id,
+                    '✅ 查询已触发，成绩将发送到你的邮箱，稍等片刻即可查收。'
+                )
+            elif cmd == "/help":
+                _send_via_api(token, chat_id,
+                    '📋 <b>使用说明</b>\n\n'
+                    '/check — 触发成绩查询，结果发送到邮箱\n'
+                    '/help — 显示本帮助'
+                )
+
+        if update_id >= offset:
+            offset = update_id + 1
+
+    try:
+        offset_file.write_text(_json.dumps({"offset": offset}, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+    return has_check
+
+
+def _send_via_api(token: str, chat_id: int, text: str) -> None:
+    """通过 Telegram API 发送消息"""
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            timeout=10
+        )
+    except Exception:
+        pass

@@ -402,6 +402,161 @@ def score_update(
 </html>"""
 
 
+def query_scores(
+    scores: Dict[str, str],
+    current_time: str,
+) -> str:
+    """生成主动查询成绩邮件（HTML）"""
+    if not scores:
+        scores_html = """            <div class="card">
+                <div class="card-title">当前成绩</div>
+                <div class="empty-state">暂无已发布的成绩</div>
+            </div>
+"""
+    else:
+        rows = ""
+        for course, score in scores.items():
+            rows += f"""                        <tr>
+                            <td class="course-cell">{course}</td>
+                            <td class="score-cell">{score}</td>
+                        </tr>
+"""
+        scores_html = f"""            <div class="card">
+                <div class="card-title">当前成绩 · {len(scores)} 门</div>
+                <table class="score-table">
+                    <thead>
+                        <tr>
+                            <th>课程名称</th>
+                            <th>成绩</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+{rows}                    </tbody>
+                </table>
+            </div>
+"""
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 24px;
+            background-color: #f0f2f5;
+        }}
+        .header {{
+            background: linear-gradient(160deg, #6366f1 0%, #4f46e5 100%);
+            color: #fff;
+            padding: 32px 24px 28px;
+            text-align: center;
+            border-radius: 12px 12px 0 0;
+        }}
+        .header h2 {{
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }}
+        .header p {{
+            margin: 6px 0 0 0;
+            opacity: 0.85;
+            font-size: 13px;
+        }}
+        .content {{
+            background: #fff;
+            padding: 24px 24px 16px;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+        }}
+        .card {{
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin-bottom: 8px;
+        }}
+        .card-title {{
+            font-weight: 600;
+            font-size: 15px;
+            color: #4f46e5;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }}
+        .empty-state {{
+            text-align: center;
+            color: #9ca3af;
+            font-size: 14px;
+            padding: 16px 0;
+        }}
+        .score-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }}
+        .score-table th {{
+            background: #eef2ff;
+            color: #4f46e5;
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #c7d2fe;
+        }}
+        .score-table th:last-child {{
+            text-align: right;
+            width: 80px;
+        }}
+        .course-cell {{
+            padding: 11px 14px;
+            border-bottom: 1px solid #f3f4f6;
+            font-weight: 500;
+        }}
+        .score-cell {{
+            padding: 11px 14px;
+            border-bottom: 1px solid #f3f4f6;
+            text-align: right;
+            font-weight: 700;
+            color: #4f46e5;
+            font-size: 15px;
+        }}
+        .footer {{
+            text-align: center;
+            color: #9ca3af;
+            font-size: 11px;
+            padding: 16px 0 0;
+            margin-top: 8px;
+            border-top: 1px solid #f3f4f6;
+            line-height: 1.8;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>&#x1F4CB; 成绩查询结果</h2>
+        <p>广州大学成绩监测系统</p>
+    </div>
+    <div class="content">
+{scores_html}
+        <div class="footer">
+            <div>成绩监测系统自动发送 · 请勿回复</div>
+            <div>{current_time}</div>
+        </div>
+    </div>
+</body>
+</html>"""
+
+
 def heartbeat(
     current_time: str,
     uptime: str,

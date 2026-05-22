@@ -15,7 +15,7 @@ from src.gzhu_login import GZHULogin, GZHULoginError
 from src.score_parser import parse_course_scores, format_scores, ScoreParseError
 from src.email_notifier import create_notifier, EmailSendError
 from src.email_status_tracker import EmailStatusTracker
-from src.templates import score_update, heartbeat
+from src.templates import score_update, heartbeat, query_scores
 
 __version__ = "1.1.0"
 
@@ -257,6 +257,26 @@ class ScoreMonitor:
         else:
             print("登录失败，请检查账号密码和网络连接")
 
+    def run_query(self) -> None:
+        """主动查询成绩并发送邮件"""
+        if not self.initialize():
+            logger.error("初始化失败")
+            sys.exit(1)
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        body = query_scores(self.previous_scores, now)
+        try:
+            self.notifier.send(
+                subject=config.EMAIL_SUBJECT,
+                body=body,
+                is_html=True
+            )
+            logger.info(f"查询邮件发送成功，共 {len(self.previous_scores)} 门课程")
+            print(f"查询完成，成绩邮件已发送（{len(self.previous_scores)} 门课程）")
+        except EmailSendError:
+            logger.error("发送查询邮件失败")
+            sys.exit(1)
+
     def run_check(self) -> None:
         """CI模式：查询一次，对比上次状态，有变化则发邮件通知"""
         if not self.initialize():
@@ -344,7 +364,10 @@ def main():
     parser.add_argument("--once", action="store_true", help="查询一次成绩并打印结果")
     parser.add_argument("--test", action="store_true", help="发送测试邮件验证配置并退出")
     parser.add_argument("--check", action="store_true", help="CI模式：查询并对比上次，有变化则发邮件通知")
+    parser.add_argument("--query", action="store_true", help="查询成绩并发送到邮箱")
     parser.add_argument("--bot", action="store_true", help="启动 Telegram Bot")
+    parser.add_argument("--set-webhook", type=str, default="", metavar="URL", help="设置 Telegram Webhook URL")
+    parser.add_argument("--poll-telegram", action="store_true", help="GitHub Actions 轮询 Telegram 消息一次")
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -356,8 +379,21 @@ def main():
         monitor.run_test()
     elif args.once:
         monitor.run_once()
+    elif args.query:
+        monitor.run_query()
     elif args.check:
         monitor.run_check()
+    elif args.set_webhook:
+        from src.telegram_bot import set_webhook
+        set_webhook(config.TELEGRAM_BOT_TOKEN, args.set_webhook)
+    elif args.poll_telegram:
+        from src.telegram_bot import poll_once
+        token = config.TELEGRAM_BOT_TOKEN
+        if not token:
+            print("未配置 TELEGRAM_BOT_TOKEN，请在 .env 中添加")
+            sys.exit(1)
+        if poll_once(token):
+            monitor.run_query()
     elif args.bot:
         from src.telegram_bot import TelegramBot, build_check_handler
         token = config.TELEGRAM_BOT_TOKEN

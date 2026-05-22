@@ -29,6 +29,7 @@ class Config:
     HEARTBEAT_INTERVAL: int = int(os.getenv("HEARTBEAT_INTERVAL", "86400"))
 
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    GITHUB_PAT: str = os.getenv("GITHUB_PAT", "")
 
     LOG_DIR: Path = BASE_DIR / "logs"
     LOG_DIR.mkdir(exist_ok=True)
