@@ -1,479 +1,282 @@
-# Gzhu Score Monitor
+# Gzhu Score Monitor · 广州大学成绩监测
 
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/K1ssuh2rd/gzhu-score-monitor)
 
-广州大学教务系统成绩监测工具。有新成绩发布时，自动通过 QQ 邮箱通知你。
+**Automatically checks Guangzhou University's academic system for new grades and notifies you via QQ email — so you never have to manually refresh again.**
 
-> 这完全是个零基础教程，一步一步跟着做就行。只要你会上网、会用记事本，就能搞定。
-
----
-
-## 这个工具能做什么？
-
-教务系统出新成绩时你自己是不知道的，总得隔三差五打开查，很烦。这个工具帮你盯着 —— 它每隔 5 分钟自动登录教务系统查一次，如果分数有变化，就给你发邮件通知。你什么都不用管，有新成绩会自动收到邮件。
-
-支持以下模式：
-
-| 模式 | 命令 | 说明 |
-|------|------|------|
-| 持续监测 | `python -m src.main` | 后台循环检查，成绩变化自动发邮件 |
-| 只看一次 | `python -m src.main --once` | 查询一次，打印成绩单（含加权均分、绩点），不发邮件 |
-| 查看并发送 | `python -m src.main --once --email` | 查询一次，打印成绩单并发送邮件报告 |
-| 选择学期 | `python -m src.main --once --semester` | 方向键交互式选择学期，可搭配 `--email` |
-| 测试邮件 | `python -m src.main --test` | 登录一次并发送测试邮件验证配置 |
-| 诊断邮件 | `python scripts/test_smtp.py` | 诊断 SMTP 连接和邮件发送 |
-| 交互菜单 | `python scripts/menu.py` | 不用记命令，菜单选数字即可操作 |
+**自动登录广州大学教务系统，成绩有更新立即通过 QQ 邮箱通知你，不用再隔三差五手动查成绩。**
 
 ---
 
-## 第一步：检查 Python 是否装好
+## 目录 / Table of Contents
 
-这个工具是用 Python 写的，你的电脑需要有 Python。
-
-### 怎么确认？
-
-1. 按键盘上的 **`Win + R`**（Win 键就是左下角那个 Windows 图标键），会弹出一个"运行"窗口
-2. 输入 **`cmd`**，然后按回车，会弹出一个黑底白字的窗口，这就是"命令提示符"
-3. 在黑窗口里输入这行字，然后按回车：
-
-```
-python --version
-```
-
-如果出现类似这样的输出：
-
-```
-Python 3.9.13
-```
-
-说明你已经装了 Python，**跳到第二步**。
-
-如果出现的是：
-
-```
-'python' 不是内部或外部命令，也不是可运行的程序或批处理文件。
-```
-
-说明还没装 Python，继续往下看。
-
-### 安装 Python
-
-1. 打开浏览器，访问 **https://www.python.org/downloads/**
-2. 页面中间有个黄色大按钮，写着 **"Download Python 3.x.x"**，点它下载安装包
-3. 下载完成后双击打开安装程序
-4. **关键一步**：安装界面的最下面有个复选框，写着 **"Add Python to PATH"**（或者 "Add python.exe to PATH"），**一定要勾上！** 不勾的话后面会很麻烦
-5. 勾好之后点 **"Install Now"**（现在安装），一路等它装完就行
-6. 装完之后，**重新打开一个命令提示符窗口**（旧的关掉，按 `Win + R` → `cmd` 重新打开）
-7. 再输入 `python --version`，这次应该能看到版本号了
+- [Install · 安装](#install--安装)
+- [Quick Start · 快速开始](#quick-start--快速开始)
+- [Usage · 使用方式](#usage--使用方式)
+- [Configuration · 配置说明](#configuration--配置说明)
+- [Project Structure · 项目结构](#project-structure--项目结构)
+- [FAQ · 常见问题](#faq--常见问题)
+- [Contributing · 贡献指南](#contributing--贡献指南)
+- [Credits · 致谢](#credits--致谢)
+- [License · 许可证](#license--许可证)
 
 ---
 
-## 第二步：下载这个项目
-
-### 如果你会用 git：
+## Install · 安装
 
 ```bash
+# 1. Clone
 git clone https://github.com/K1ssuh2rd/gzhu-score-monitor.git
 cd gzhu-score-monitor
-```
 
-### 如果你不会用 git（推荐这种方式）：
+# 2. (Optional) Create virtual environment
+python -m venv .venv && source .venv/bin/activate  # macOS/Linux
+python -m venv .venv && .venv\Scripts\activate     # Windows
 
-1. 打开浏览器，访问 **https://github.com/K1ssuh2rd/gzhu-score-monitor**
-2. 页面右上角有个绿色的 **"<> Code"** 按钮，点它
-3. 在弹出的菜单里，点最下面的 **"Download ZIP"**
-4. 下载完成后，在你喜欢的位置（比如桌面）解压这个 ZIP 文件
-5. 解压后会得到一个文件夹叫 `gzhu-score-monitor`
-
----
-
-## 第三步：安装依赖
-
-"依赖"就是别人写好的代码包，这个项目需要用到它们。安装很简单：
-
-1. 在文件管理器里打开刚才解压出来的 `gzhu-score-monitor` 文件夹
-2. 在文件夹的**地址栏**里直接输入 **`cmd`**，然后按回车
-
-> 这一步是要在"这个文件夹里"打开命令提示符。地址栏就是文件管理器上方显示路径的那一栏，比如显示着 `此电脑 > 桌面 > gzhu-score-monitor` 的地方，点一下变成蓝色的路径，删掉直接输入 `cmd`，回车。
-
-3. 在弹出的黑窗口里输入以下命令，回车：
-
-```bash
+# 3. Install dependencies
 pip install -r requirements.txt
-```
 
-4. 你会看到一堆文字在滚，这是在下载和安装依赖。等它停下来，看到最后一行没有红色的 "error" 字样，就说明装好了。
-
-> 如果这一步报错说 `pip` 不是命令，说明你在安装 Python 的时候没勾选 "Add Python to PATH"。回到第一步重新安装 Python，这次一定把那勾勾上。
-
----
-
-## 第四步：获取 QQ 邮箱授权码（重要！）
-
-程序要发邮件通知你，需要一个发件邮箱。我们用 QQ 邮箱来发。
-
-> 下面每一步请严格照做，别跳步骤。
-
-### 4.1 打开 QQ 邮箱网页版
-
-打开浏览器，访问 **https://mail.qq.com/** ，用你的 QQ 号登录。
-
-### 4.2 进入设置页面
-
-登录后，看页面左上角，会看到 QQ 邮箱的 logo 和你的邮箱地址。在页面的左上区域找到 **"设置"** 两个字（在 logo 下面一点），点击它。
-
-### 4.3 切换到"账户"标签
-
-点完"设置"后，页面会变。在页面中间偏上的位置，有一排标签，找到一个叫 **"账户"** 的标签，点击它。
-
-### 4.4 找到 SMTP 服务
-
-在"账户"页面里，往下滚动，找到一块标题叫 **"POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务"** 的区域。这里面有几项服务，我们要找的是：
-
-> **SMTP 服务**（用于发信）
-
-现在你的 SMTP 服务那一行显示的应该是 **"已关闭"**。
-
-### 4.5 开启 SMTP 服务
-
-1. 点击 SMTP 服务那行右边的 **"开启"** 按钮
-2. QQ 会弹出一个安全验证，让你用手机发一条短信到某个号码
-3. 拿出手机，按屏幕上显示的号码和短信内容，**原样发送这条短信**
-4. 短信发送成功后，回到电脑上，点击页面上的 **"我已发送"** 或类似的确认按钮
-
-### 4.6 拿到授权码
-
-验证通过后，页面上会弹出一个框，里面显示的是一串字母，类似这样：
-
-```
-tfnkppxabcdedabd
-```
-
-**这串字母就是你的 SMTP 授权码。**
-
-> **⚠️ 极度重要**：这串授权码**只会在这个弹窗里出现一次**，关掉之后就再也看不到了！请立刻把它复制下来，记在手机备忘录或者纸上。如果忘了，只能重新走一遍 4.5 的流程重新获取。
-
-### 4.7 确认授权码拿到了
-
-你现在手头应该有以下信息：
-
-- 你的 QQ 邮箱地址，格式是 `你的QQ号@qq.com`，比如 `123456789@qq.com`
-- 一串字母授权码，比如 `tfnkppxabcdedabd`
-
-确认都拿到了，再进入下一步。
-
----
-
-## 第五步：填写配置文件
-
-### 5.1 找到配置文件模板
-
-在 `gzhu-score-monitor` 文件夹里，找到一个叫 **`.env.example`** 的文件。
-
-> 如果看不到这个文件，可能是系统隐藏了文件扩展名。没关系，它是个浅色的文件，图标可能像一张纸。
-
-### 5.2 创建真正的配置文件
-
-**Windows 用户：**
-
-1. 先选中 `.env.example` 这个文件，按 `Ctrl + C` 复制，再按 `Ctrl + V` 粘贴
-2. 你会得到一个叫 `.env.example - 副本` 的文件，把它**重命名**为 **`.env`**（注意：名字就是 `.env`，点号在最前面）
-
-> 系统可能会警告"如果改变文件扩展名，文件可能不可用"，不用管，点是。
-
-**Mac / Linux 用户：**
-
-在黑窗口中（先 cd 到这个文件夹）输入：
-
-```bash
+# 4. Setup config
 cp .env.example .env
-```
+# Then edit .env with your credentials (see Configuration section)
 
-### 5.3 用记事本编辑 .env 文件
-
-1. **右键点击** `.env` 文件
-2. 选择 **"打开方式"** → **"记事本"**
-3. 文件内容长这样：
-
-```
-GZHU_USERNAME=你的学号
-GZHU_PASSWORD=你的教务系统密码
-QQ_EMAIL=你的QQ邮箱@qq.com
-QQ_AUTH_CODE=你的SMTP授权码
-RECEIVER_EMAILS=receiver1@example.com,receiver2@example.com
-TEST_EMAIL=test_receiver@example.com
-...
-```
-
-### 5.4 填入你的真实信息
-
-把等号右边的示例文字**替换成你自己的真实信息**。只改下面这些行就行，其他的不用动：
-
-| 这一行 | 改成什么 |
-|--------|----------|
-| `GZHU_USERNAME=你的学号` | 把"你的学号"改成你的学号，如 `GZHU_USERNAME=2112345678` |
-| `GZHU_PASSWORD=你的教务系统密码` | 改成你登录教务系统的密码 |
-| `QQ_EMAIL=你的QQ邮箱@qq.com` | 改成你的 QQ 邮箱地址，如 `QQ_EMAIL=123456789@qq.com` |
-| `QQ_AUTH_CODE=你的SMTP授权码` | 改成第四步拿到的那串字母，如 `QQ_AUTH_CODE=tfnkppxabcdedabd` |
-| `RECEIVER_EMAILS=receiver1@example.com` | 改成接收通知的邮箱，可以填你自己的 QQ 邮箱；**多个邮箱用英文逗号分隔**，如 `RECEIVER_EMAILS=123456@qq.com,roommate@qq.com` |
-
-改完之后，比如你的学号是 2112345678，密码是 abc123，QQ 是 123456789@qq.com，授权码是 tfnkppxabcdedabd，那 `.env` 文件的前几行应该是这样：
-
-```
-GZHU_USERNAME=2112345678
-GZHU_PASSWORD=abc123
-QQ_EMAIL=123456789@qq.com
-QQ_AUTH_CODE=tfnkppxabcdedabd
-RECEIVER_EMAILS=123456789@qq.com
-```
-
-4. 确认无误后，**点菜单栏的"文件" → "保存"**，然后关掉记事本。
-
----
-
-## 第六步：发送测试邮件
-
-现在来做一次测试，看看所有设置是否正确。
-
-1. 在 `gzhu-score-monitor` 文件夹的地址栏输入 `cmd`，打开命令提示符
-2. 输入以下命令，回车：
-
-```bash
+# 5. Test it!
 python -m src.main --test
 ```
 
-3. 等待几秒钟，看看屏幕上显示什么：
-
-   - 如果看到 **"登录成功，测试邮件已发送"** → **恭喜，一切正常！** 去你的邮箱看看有没有收到测试邮件（可能被放到垃圾箱里了，翻一下）
-   - 如果看到 **"登录失败"** → 检查学号和密码填对了没有，确认你能在浏览器里正常打开教务系统网站
-   - 如果看到一堆报错 → 跳到最下面的"常见问题"部分看看
-
-> 如果测试邮件没收到，可以运行 `python scripts/test_smtp.py` 来专门诊断邮件发送的问题。
+> Requires Python 3.9+. Don't have it? Download from [python.org](https://www.python.org/downloads/). Check the box **"Add Python to PATH"** during installation.
 
 ---
 
-## 第七步：选择你的运行模式
+## Quick Start · 快速开始
 
-### 方式A：持续监测（推荐，电脑长期开着）
+| 你想做什么？ | 命令 |
+|------------|------|
+| 后台持续监测，成绩变化自动通知 | `python -m src.main` |
+| 查一次，终端打印成绩单 | `python -m src.main --once` |
+| 查一次，同时发邮件 | `python -m src.main --once --email` |
+| 选一个学期查 | `python -m src.main --once --semester` |
+| 测试邮件配置是否正常 | `python -m src.main --test` |
+| 不想记命令，用菜单 | `python scripts/menu.py` |
+
+---
+
+## Usage · 使用方式
+
+### 持续监测（推荐）
 
 ```bash
 python -m src.main
 ```
 
-程序启动后，会显示类似这样的信息：
+程序每 5 分钟自动登录教务系统检查一次。如果检测到新成绩或成绩变动，立即发送邮件通知。同时每 24 小时发一次心跳邮件，确认程序还在正常运行。
 
-```
-初始化完成，当前共有 42 门课程成绩
-开始监控成绩变化...
-检查间隔: 300 秒
-```
+按 `Ctrl + C` 停止。
 
-这说明程序已经在后台跑着了。每隔 5 分钟它会自动查一次，有新成绩就发邮件。程序还会定期发送**心跳邮件**确认自己还在正常运行（默认每 24 小时）。
-
-**要停止的时候**，在这个窗口里按 `Ctrl + C`。
-
-> 这个窗口不能关。关了程序也就停了。你可以把它最小化，不影响你干别的。
-
-### 方式B：只看一次成绩（打印结果，不发邮件）
+### 单次查询
 
 ```bash
+# 查本学期全部成绩，终端打印（含加权均分、绩点）
 python -m src.main --once
+
+# 同上，同时把成绩单发邮件到邮箱
+python -m src.main --once --email
+
+# 交互式选择学期（方向键 ↑↓ 移动，回车确认）
+python -m src.main --once --semester
+python -m src.main --once --semester --email
 ```
 
-直接打印你当前学期的完整成绩单，包含每门课的成绩、绩点、学分，以及加权均分和平均绩点。查完就退出，不发邮件。
+输出示例：
 
-可以配合 `--semester` 选择其他学期：
-
-```bash
-python -m src.main --once --semester    # 方向键选择学期
+```
+  2023-2024 学年 第一学期  成绩单
+  --------------------------------------------------
+  高等数学A
+    成绩     90    绩点 3.7    学分 4.0
+  大学英语1
+    成绩     85    绩点 3.3    学分 3.0
+  --------------------------------------------------
+  2 门    总学分 7.0    加权均分 87.86    平均绩点 3.53
 ```
 
-加上 `--email` 会同时把成绩发到邮箱：
+### 测试与诊断
 
 ```bash
-python -m src.main --once --email              # 查本学期并发送邮件
-python -m src.main --once --semester --email   # 选学期并发送邮件
+python -m src.main --test           # 登录 + 发送测试邮件
+python scripts/test_smtp.py         # 逐步诊断 SMTP 连接问题
+python scripts/menu.py              # 交互式菜单
+```
+
+### pip install（可选）
+
+```bash
+pip install .                       # 安装到系统
+gzhu-monitor                        # = python -m src.main
+gzhu-monitor --once --semester      # 支持所有参数
+gzhu-test-smtp                      # = python scripts/test_smtp.py
 ```
 
 ---
 
-## 完整命令参考
+## Configuration · 配置说明
 
-### 所有命令行参数
-
-| 参数 | 说明 |
-|------|------|
-| `--once` | 查询一次，打印成绩单（含加权均分、绩点） |
-| `--email` | 配合 `--once`，同时发送邮件报告 |
-| `--test` | 登录教务系统，成功后发送测试邮件验证邮件配置 |
-| `--semester` | 交互式选择学期（方向键 ↑↓ 移动，回车确认，Esc 取消），配合 `--once` 使用 |
-| `--version` | 显示版本号 |
-| `--help` | 显示所有参数的帮助信息 |
-
-### 交互式菜单
-
-如果不想记命令，运行菜单脚本，选数字就行：
-
-```bash
-python scripts/menu.py
-```
-
-菜单选项：查本学期 / 选学期查 / 持续监测。
-
-### 诊断 SMTP
-
-```bash
-python scripts/test_smtp.py    # 诊断 SMTP：逐步验证 SSL 连接 → 登录 → 发送
-```
-
-### pip install 安装（可选）
-
-如果你熟悉 Python，可以用 `pip install` 安装本项目，之后就能用短命令：
-
-```bash
-pip install .                     # 在项目根目录执行
-gzhu-monitor                      # = python -m src.main
-gzhu-monitor --once --semester    # = python -m src.main --once --semester
-gzhu-test-smtp                    # = python scripts/test_smtp.py
-```
-
----
-
-## 心跳邮件
-
-持续监测模式下，程序会定期发送**心跳邮件**来确认自己还在正常运行。如果你突然收不到心跳邮件了，说明程序可能已经停止或崩溃。
-
-心跳邮件内容包括：程序运行状态、距上次心跳的时间、当前监测的课程数。
-
-在 `.env` 中配置：
-
-```
-HEARTBEAT_ENABLED=true      # 开启心跳邮件（默认 true）
-HEARTBEAT_INTERVAL=86400    # 心跳间隔秒数，86400 = 24小时
-```
-
-只想监测成绩、不需要心跳的话，把 `HEARTBEAT_ENABLED` 设为 `false`。
-
----
-
-## 怎么让程序开机自启？
-
-### Windows
-
-1. 在桌面右键 → **新建** → **快捷方式**
-2. 位置填：`python -m src.main`（如果你想把程序藏起来在后台跑，用 `pythonw -m src.main`）
-3. 点下一步，起个名字叫"成绩监测"，完成
-4. 按 `Win + R`，输入 **`shell:startup`**，回车
-5. 把这个快捷方式**拖进**刚打开的文件夹
-6. 以后每次开机，程序就会自动开始监测了
-
-### Mac / Linux
-
-可以用 crontab 设置开机启动：
-
-```bash
-crontab -e
-```
-
-添加一行：
-
-```
-@reboot cd /你的路径/gzhu-score-monitor && python -m src.main
-```
-
----
-
-## 完整配置说明
-
-`.env` 文件里所有可以改的选项（不改就用默认值，也很正常）：
+`.env` 文件所有可配置项：
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|:---:|--------|------|
 | `GZHU_USERNAME` | ✓ | - | 学号 |
 | `GZHU_PASSWORD` | ✓ | - | 教务系统密码 |
-| `QQ_EMAIL` | ✓ | - | 发通知的 QQ 邮箱 |
-| `QQ_AUTH_CODE` | ✓ | - | QQ 邮箱 SMTP 授权码（第四步拿到的） |
-| `RECEIVER_EMAILS` | ✓ | - | 收通知的邮箱，多个用英文逗号分隔 |
-| `TEST_EMAIL` | | 和 RECEIVER_EMAILS 一样 | 测试邮件的收件地址 |
-| `CHECK_INTERVAL` | | 300（5分钟） | 检查间隔，单位秒 |
-| `EMAIL_SUBJECT` | | 新成绩通知 | 通知邮件的标题 |
-| `ENABLE_LOGIN_TEST_EMAIL` | | true | 登录后是否自动发测试邮件 |
-| `HEARTBEAT_ENABLED` | | true | 是否定期发心跳邮件确认程序正常 |
-| `HEARTBEAT_INTERVAL` | | 86400（24小时） | 心跳邮件间隔，单位秒 |
+| `QQ_EMAIL` | ✓ | - | 发通知的 QQ 邮箱地址 |
+| `QQ_AUTH_CODE` | ✓ | - | QQ 邮箱 SMTP 授权码（非 QQ 密码！） |
+| `RECEIVER_EMAILS` | ✓ | - | 接收通知的邮箱，多个用英文逗号分隔 |
+| `TEST_EMAIL` | | 同 `RECEIVER_EMAILS` | 测试邮件收件地址 |
+| `CHECK_INTERVAL` | | `300` | 检查间隔（秒），默认 5 分钟 |
+| `EMAIL_SUBJECT` | | `新成绩通知` | 通知邮件标题 |
+| `ENABLE_LOGIN_TEST_EMAIL` | | `true` | 登录后是否自动发测试邮件 |
+| `HEARTBEAT_ENABLED` | | `true` | 是否发送心跳邮件 |
+| `HEARTBEAT_INTERVAL` | | `86400` | 心跳间隔（秒），默认 24 小时 |
+
+### Getting QQ Email Auth Code · 获取 QQ 邮箱授权码
+
+1. 访问 [mail.qq.com](https://mail.qq.com/)，登录你的 QQ 邮箱
+2. 进入 **设置 → 账户**
+3. 找到 **"POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务"** 区域
+4. 开启 **SMTP 服务**，按提示发送短信验证
+5. 短信验证通过后会弹出一串字母授权码，**立即复制保存**
+6. 将这串授权码填入 `.env` 的 `QQ_AUTH_CODE` 字段
+
+> ⚠️ 授权码**只显示一次**，关了弹窗就找不到了，只能重新获取。
 
 ---
 
-## 项目结构
+## Project Structure · 项目结构
 
 ```
-├── pyproject.toml              # 项目元数据
-├── requirements.txt            # Python 依赖列表
-├── scripts/                    # 辅助工具
-│   ├── menu.py                 # 交互式菜单，选数字操作
+gzhu-score-monitor/
+├── pyproject.toml              # 项目元数据 & pip install 入口
+├── requirements.txt            # Python 依赖
+├── .env.example                # 配置文件模板
+├── scripts/
+│   ├── menu.py                 # 交互式菜单
 │   └── test_smtp.py            # SMTP 连通性诊断工具
-├── src/                        # 核心代码
-│   ├── main.py                 # 主程序入口（argparse 命令行、ScoreMonitor）
-│   ├── gzhu_login.py           # 教务系统 CAS 登录、session 缓存、成绩查询
-│   ├── score_parser.py         # 成绩 JSON 解析、加权均分 & GPA 计算
-│   ├── email_notifier.py       # QQ 邮箱 SMTP 发送（SSL 465 端口）
-│   ├── templates.py            # 邮件 HTML 模板（测试/成绩更新/心跳/查询报告）
+├── src/
+│   ├── main.py                 # 入口：argparse CLI + ScoreMonitor
+│   ├── gzhu_login.py           # CAS 登录、session 缓存、成绩查询
+│   ├── score_parser.py         # JSON 解析、加权均分 & GPA 计算
+│   ├── email_notifier.py       # QQ SMTP(465 SSL) 邮件发送
+│   ├── templates.py            # 邮件 HTML 模板（测试/更新/心跳/查询）
 │   ├── config.py               # .env 配置加载
-│   └── logger.py               # 日志配置（DEBUG→文件, INFO→控制台）
-├── logs/                       # 运行日志和调试数据（自动生成，不提交 git）
-└── status/                     # session 缓存和成绩快照（自动生成，不提交 git）
+│   └── logger.py               # 双通道日志（DEBUG→文件, INFO→控制台）
+├── logs/                       # 运行日志（gitignore）
+└── status/                     # session 缓存 & 成绩快照（gitignore）
 ```
+
+### How It Works · 原理
+
+```
+定时唤醒 → CAS 登录 (DES 加密) → SSO 跳转至教务系统
+    → POST 查询成绩 JSON → 解析 & 对比
+    → 有变化? → QQ 邮箱 (SMTP 465 SSL) 发送 HTML 通知
+    → 无变化? → 记录日志,等待下一轮
+    → 定期心跳: 每 24h 确认程序存活
+```
+
+登录链路：`newcas.gzhu.edu.cn` → 融合门户 → `jwxt.gzhu.edu.cn` SSO → 教务系统
 
 ---
 
-## 常见问题
+## FAQ · 常见问题
 
-### 邮件发不出去？
+<details>
+<summary><b>邮件发不出去？</b></summary>
 
-1. 确认 QQ 邮箱 SMTP 服务确实开了（去 QQ 邮箱设置→账户里看看 SMTP 那行是不是"已开启"）
-2. `.env` 里的 `QQ_AUTH_CODE` 填的是授权码，**不是你的 QQ 密码**
-3. 运行诊断脚本看看具体哪里出了问题：
+1. 确认 QQ 邮箱 SMTP 服务已开启（设置 → 账户 → SMTP 状态为"已开启"）
+2. `.env` 里的 `QQ_AUTH_CODE` 填的是**授权码**，不是 QQ 密码
+3. 运行 `python scripts/test_smtp.py` 逐步排查
+</details>
 
-```bash
-python scripts/test_smtp.py
-```
+<details>
+<summary><b>提示"登录失败"？</b></summary>
 
-### 提示"登录失败"？
+1. 检查 `.env` 中学号和密码是否正确（注意空格、大小写）
+2. 在浏览器中手动登录教务系统确认账号正常
+3. 查看 `logs/score_monitor.log` 获取详细错误信息
+4. 确认你能访问 `newcas.gzhu.edu.cn`（该域名仅限中国大陆访问）
+</details>
 
-1. 检查 `.env` 里的学号和密码有没有填错（注意大小写、空格）
-2. 打开浏览器，去教务系统网站试着登录一次，确认账号密码对的
-3. 看看 `logs/score_monitor.log` 这个日志文件，里面会有详细的错误信息
+<details>
+<summary><b>成绩更新了但没收到通知？</b></summary>
 
-### 成绩更新了但没收到通知？
+1. 检查间隔默认 5 分钟，稍微等一下
+2. 查看邮箱**垃圾邮件**文件夹
+3. 检查 `logs/score_monitor.log` 日志确认程序状态
+</details>
 
-1. 程序是**每 5 分钟**查一次，耐心等一等
-2. 检查 `logs/score_monitor.log`，确认程序还在正常运行
-3. 到邮箱的**垃圾邮件**文件夹翻一翻，有时通知邮件会被误判为垃圾邮件
-
-### 能改检查频率吗？
-
-可以。打开 `.env` 文件，改 `CHECK_INTERVAL` 的值。这个值的单位是**秒**，默认 300（5分钟）：
-
-- 想每 1 分钟查一次：填 `60`
-- 想每 10 分钟查一次：填 `600`
-- 想每 1 小时查一次：填 `3600`
-
-### cmd 窗口关了就停了怎么办？
-
-这是正常的。如果你想让程序在后台静默运行、不显示窗口，用这个命令：
+<details>
+<summary><b>怎么在后台静默运行？</b></summary>
 
 ```bash
+# Windows：无窗口后台运行
 pythonw -m src.main
-```
+# 停止：打开任务管理器，结束 python 进程
 
-（注意是 `pythonw` 不是 `python`，多一个 w。）这样不会弹出任何窗口，程序在后台跑。要停止的话去任务管理器里找 python 进程结束掉。
+# macOS / Linux：
+nohup python -m src.main &
+```
+</details>
+
+<details>
+<summary><b>怎么开机自启？</b></summary>
+
+**Windows：** `Win + R` → `shell:startup` → 新建快捷方式，目标填 `python -m src.main`（静默用 `pythonw`）。
+
+**macOS / Linux：** `crontab -e` 添加 `@reboot cd /path/to/project && python -m src.main`。
+</details>
+
+<details>
+<summary><b>能调整检查频率吗？</b></summary>
+
+在 `.env` 中修改 `CHECK_INTERVAL`（单位秒）：
+- 1 分钟：`60`
+- 10 分钟：`600`
+- 1 小时：`3600`
+
+频率太高可能被教务系统限流，建议不低于 300 秒。
+</details>
+
+<details>
+<summary><b>Python 3.12+ 报 SSL 错误？</b></summary>
+
+教务系统服务器 SSL 配置老旧（不支持 TLS 1.3），代码已内置 TLS 降级适配器（`set_ciphers('DEFAULT:@SECLEVEL=1')`）。如仍有问题请提交 Issue。
+</details>
 
 ---
 
-## 相关项目
+## Contributing · 贡献指南
+
+欢迎提交 PR！贡献前请：
+
+1. **Fork** 本项目
+2. 创建特性分支：`git checkout -b feature/your-feature`
+3. 保持代码风格一致（本项目不强制 formatter，但请遵循现有风格）
+4. 确认 `python -m src.main --test` 通过
+5. 提交 PR 时写清楚做了什么、为什么这样做
+
+Bug report 或 Feature request 请在 [Issues](https://github.com/K1ssuh2rd/gzhu-score-monitor/issues) 提出。
+
+---
+
+## Credits · 致谢
 
 原始项目：[01seven/Gzhu-Scores-checking](https://github.com/01seven/Gzhu-Scores-checking)
 
-## License
+本项目在其基础上重构和增强了：session 缓存、交互式学期选择、心跳邮件、SMTP 诊断、加权均分 & GPA 计算、邮件 HTML 模板、TLS 兼容适配等。
+
+---
+
+## License · 许可证
 
 MIT
